@@ -25,6 +25,7 @@ import { createPinia } from 'pinia';
 // 🧩 應用程式組件引入 (Application Component Imports)
 import App from './App.vue';
 import router from './router';
+import { useDataStore } from './stores/dataStore';
 
 // 🎨 引入第三方樣式文件 (Import Third-Party Style Files)
 import 'bootstrap/dist/css/bootstrap.min.css'; // Bootstrap 5 CSS 框架
@@ -53,9 +54,11 @@ app.use(router);
 // 📦 註冊 Pinia 狀態管理系統 (Register Pinia State Management System)
 app.use(pinia);
 
-// 🌍 掛載應用程式到 DOM 元素 (Mount Application to DOM Element)
-// 將 Vue 應用程式掛載到 index.html 中 id="app" 的元素上
-app.mount('#app');
+// 依碳排 CSV「年度」欄建立多個事業圖層後再掛載，圖層列表才會正確
+const dataStore = useDataStore();
+dataStore.initReportYearLayers().finally(() => {
+  app.mount('#app');
+});
 
 // 🐛 應用程式啟動完成的調試資訊 (Application Startup Debug Information)
 console.log('🚀 空間分析視覺化平台已啟動');

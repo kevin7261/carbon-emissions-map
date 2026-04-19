@@ -1,34 +1,38 @@
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
 
-import { loadReportWithGoogleLocationData } from '../utils/dataProcessor.js';
+import {
+  fetchReportCsvYears,
+  loadReportWithGoogleLocationData,
+} from '../utils/dataProcessor.js';
+
+/** 事業碳排各年度圖層輪替顏色（與 CSS 變數 --my-color-* 對應） */
+const REPORT_YEAR_LAYER_COLORS = [
+  'lime',
+  'green',
+  'teal',
+  'cyan',
+  'lightblue',
+  'blue',
+  'indigo',
+  'purple',
+  'deeporange',
+  'amber',
+];
+
+const REPORT_CSV_FILE = 'report_with_google_location.csv';
 
 // 主要數據存儲定義 (Main Data Store Definition)
 export const useDataStore = defineStore(
   'data',
   () => {
+    /** 等時圈自動載入時優先載入的「最新年度」事業圖層 id（report-year-113 等） */
+    const primaryCarbonReportLayerId = ref(null);
+
     const layers = ref([
       {
         groupName: '基礎設施',
-        groupLayers: [
-          {
-            layerId: '事業',
-            layerName: '事業',
-            visible: false,
-            isLoading: false,
-            isLoaded: false,
-            type: 'point',
-            shape: 'circle',
-            colorName: 'lime',
-            geoJsonData: null,
-            summaryData: null,
-            tableData: null,
-            legendData: null,
-            loader: loadReportWithGoogleLocationData,
-            fileName: 'report_with_google_location.csv',
-            fieldName: null,
-          },
-        ],
+        groupLayers: [],
       },
       {
         groupName: '數據分析',
@@ -240,6 +244,46 @@ export const useDataStore = defineStore(
         allLayers.push(...group.groupLayers);
       }
       return allLayers;
+    };
+
+    /**
+     * 讀取碳排 CSV 的「年度」欄，為每個年度建立一個事業點圖層（共用同一檔案、載入時依 filterYear 篩選）。
+     */
+    const initReportYearLayers = async () => {
+      try {
+        const years = await fetchReportCsvYears(REPORT_CSV_FILE);
+        const infra = layers.value.find((g) => g.groupName === '基礎設施');
+        if (!infra) return;
+        if (years.length === 0) {
+          console.warn('碳排 CSV 中未解析到任何年度');
+          infra.groupLayers = [];
+          primaryCarbonReportLayerId.value = null;
+          return;
+        }
+        infra.groupLayers = years.map((year, i) => ({
+          layerId: `report-year-${year}`,
+          layerName: `事業 (${year}年)`,
+          filterYear: year,
+          visible: false,
+          isLoading: false,
+          isLoaded: false,
+          type: 'point',
+          shape: 'circle',
+          colorName: REPORT_YEAR_LAYER_COLORS[i % REPORT_YEAR_LAYER_COLORS.length],
+          geoJsonData: null,
+          summaryData: null,
+          tableData: null,
+          legendData: null,
+          loader: loadReportWithGoogleLocationData,
+          fileName: REPORT_CSV_FILE,
+          fieldName: null,
+          isCarbonReportYearLayer: true,
+        }));
+        primaryCarbonReportLayerId.value = `report-year-${years[0]}`;
+      } catch (e) {
+        console.error('初始化年度事業圖層失敗:', e);
+        primaryCarbonReportLayerId.value = null;
+      }
     };
 
     // 控制圖層的顯示/隱藏，並在需要時自動載入資料
@@ -748,7 +792,7 @@ export const useDataStore = defineStore(
         });
 
         console.log('💡 解決方案：');
-        console.log('   1. 在左側圖層面板中開啟「事業」圖層');
+        console.log('   1. 在左側圖層面板中開啟至少一個「事業 (○○年)」圖層');
         console.log('   2. 等待圖層載入完成後再進行等時圈分析');
         console.log('   3. 或者可以考慮自動載入相關圖層');
 
@@ -986,8 +1030,9 @@ export const useDataStore = defineStore(
      * @returns {Promise<void>} 完成所有圖層載入的 Promise
      */
     const autoLoadImportantLayersForAnalysis = async () => {
-      // 定義重要的長照設施圖層 ID（按重要性排序）
-      const importantLayerIds = ['事業'];
+      const importantLayerIds = primaryCarbonReportLayerId.value
+        ? [primaryCarbonReportLayerId.value]
+        : [];
 
       const layersToLoad = [];
 
@@ -999,39 +1044,42 @@ export const useDataStore = defineStore(
         }
       });
 
-      if (layersToLoad.length > 0) {
-        console.log(
-          `🚀 自動載入 ${layersToLoad.length} 個重要圖層用於等時圈分析:`,
-          layersToLoad.map((l) => l.layerName)
-        );
-
-        // 並行載入所有圖層
-        const loadPromises = layersToLoad.map(async (layer) => {
-          try {
-            layer.isLoading = true;
-            layer.visible = true; // 設為可見
-
-            if (layer.loader) {
-              const data = await layer.loader(layer);
-              layer.geoJsonData = data.geoJsonData;
-              layer.summaryData = data.summaryData;
-              layer.tableData = data.tableData;
-              layer.legendData = data.legendData;
-              layer.isLoaded = true;
-              console.log(`✅ 已載入圖層: ${layer.layerName}`);
-            }
-          } catch (error) {
-            console.error(`❌ 載入圖層失敗: ${layer.layerName}`, error);
-          } finally {
-            layer.isLoading = false;
-          }
-        });
-
-        await Promise.all(loadPromises);
-        console.log('🎉 重要圖層載入完成，可以進行等時圈分析');
-      } else {
-        console.log('✅ 重要圖層已經載入，無需額外載入');
+      if (importantLayerIds.length === 0) {
+        return;
       }
+      if (layersToLoad.length === 0) {
+        console.log('✅ 重要圖層已經載入，無需額外載入');
+        return;
+      }
+
+      console.log(
+        `🚀 自動載入 ${layersToLoad.length} 個重要圖層用於等時圈分析:`,
+        layersToLoad.map((l) => l.layerName)
+      );
+
+      const loadPromises = layersToLoad.map(async (layer) => {
+        try {
+          layer.isLoading = true;
+          layer.visible = true;
+
+          if (layer.loader) {
+            const data = await layer.loader(layer);
+            layer.geoJsonData = data.geoJsonData;
+            layer.summaryData = data.summaryData;
+            layer.tableData = data.tableData;
+            layer.legendData = data.legendData;
+            layer.isLoaded = true;
+            console.log(`✅ 已載入圖層: ${layer.layerName}`);
+          }
+        } catch (error) {
+          console.error(`❌ 載入圖層失敗: ${layer.layerName}`, error);
+        } finally {
+          layer.isLoading = false;
+        }
+      });
+
+      await Promise.all(loadPromises);
+      console.log('🎉 重要圖層載入完成，可以進行等時圈分析');
     };
 
     /**
@@ -2537,6 +2585,7 @@ export const useDataStore = defineStore(
       layers,
       findLayerById, // 根據 ID 尋找圖層
       getAllLayers, // 獲取所有圖層的扁平陣列
+      initReportYearLayers,
       toggleLayerVisibility,
       selectedFeature,
       setSelectedFeature,

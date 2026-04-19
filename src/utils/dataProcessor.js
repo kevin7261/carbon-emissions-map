@@ -1903,13 +1903,46 @@ export async function load41Data(layer) {
 }
 
 /**
+ * 掃描碳排報告 CSV，回傳出現過的「年度」值（民國年），由新到舊排序。
+ */
+export async function fetchReportCsvYears(fileName) {
+  const filePath = `/carbon-emissions-map/data/csv/${fileName}`;
+  const response = await fetch(filePath);
+  if (!response.ok) {
+    throw new Error(`無法讀取 ${fileName}: HTTP ${response.status}`);
+  }
+  const csvText = await response.text();
+  const lines = csvText.split(/\r?\n/).filter((l) => l.length > 0);
+  if (lines.length < 2) {
+    return [];
+  }
+  const headers = parseCsvLine(lines[0]).map((h) => h.trim());
+  const yearIdx = headers.indexOf('年度');
+  if (yearIdx < 0) {
+    console.warn('CSV 缺少「年度」欄位');
+    return [];
+  }
+  const years = new Set();
+  for (let i = 1; i < lines.length; i++) {
+    const row = parseCsvLine(lines[i]);
+    const y = row[yearIdx] != null ? String(row[yearIdx]).trim() : '';
+    if (y) years.add(y);
+  }
+  return Array.from(years).sort((a, b) => Number(b) - Number(a));
+}
+
+/**
  * 碳排報告（含 Google 緯經度）— public/data/csv/report_with_google_location.csv
- * 供「事業」圖層使用（欄位含引號內逗號，需 parseCsvLine）
+ * 若 layer.filterYear 有值，只載入該年度資料（不同年度各自為一圖層）。
  */
 export async function loadReportWithGoogleLocationData(layer) {
   try {
     const layerId = layer.layerId;
     const colorName = layer.colorName;
+    const filterYear =
+      layer.filterYear != null && String(layer.filterYear).trim() !== ''
+        ? String(layer.filterYear).trim()
+        : null;
 
     const filePath = `/carbon-emissions-map/data/csv/${layer.fileName}`;
     const response = await fetch(filePath);
@@ -1950,23 +1983,24 @@ export async function loadReportWithGoogleLocationData(layer) {
       return i >= 0 && row[i] !== undefined ? row[i] : '';
     };
 
+    const dataRows = lines.slice(1).map((line) => parseCsvLine(line));
+    const filteredRows = dataRows.filter((row) => {
+      const lat = parseFloat(cell(row, 'lat'));
+      const lon = parseFloat(cell(row, 'lon'));
+      if (isNaN(lat) || isNaN(lon)) return false;
+      if (filterYear != null) {
+        const y = col.年度 >= 0 ? String(row[col.年度] ?? '').trim() : '';
+        if (y !== filterYear) return false;
+      }
+      return true;
+    });
+
     const geoJsonData = {
       type: 'FeatureCollection',
-      features: lines
-        .slice(1)
-        .map((line, index) => {
-          const row = parseCsvLine(line);
+      features: filteredRows.map((row, index) => {
           const lat = parseFloat(cell(row, 'lat'));
           const lon = parseFloat(cell(row, 'lon'));
           const id = index + 1;
-
-          if (isNaN(lat) || isNaN(lon)) {
-            console.warn(`第 ${id} 行座標無效:`, {
-              緯度: cell(row, 'lat'),
-              經度: cell(row, 'lon'),
-            });
-            return null;
-          }
 
           const 事業名稱 = cell(row, '事業名稱');
           const propertyData = {
@@ -2012,8 +2046,7 @@ export async function loadReportWithGoogleLocationData(layer) {
               tableData,
             },
           };
-        })
-        .filter((feature) => feature !== null),
+      }),
     };
 
     const tableData = geoJsonData.features.map((feature) => ({
