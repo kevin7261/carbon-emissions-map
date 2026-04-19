@@ -31,7 +31,7 @@ export const useDataStore = defineStore(
 
     const layers = ref([
       {
-        groupName: '基礎設施',
+        groupName: '公司行號',
         groupLayers: [],
       },
       {
@@ -252,7 +252,7 @@ export const useDataStore = defineStore(
     const initReportYearLayers = async () => {
       try {
         const years = await fetchReportCsvYears(REPORT_CSV_FILE);
-        const infra = layers.value.find((g) => g.groupName === '基礎設施');
+        const infra = layers.value.find((g) => g.groupName === '公司行號');
         if (!infra) return;
         if (years.length === 0) {
           console.warn('碳排 CSV 中未解析到任何年度');
@@ -262,7 +262,7 @@ export const useDataStore = defineStore(
         }
         infra.groupLayers = years.map((year, i) => ({
           layerId: `report-year-${year}`,
-          layerName: `事業 (${year}年)`,
+          layerName: `${year}年`,
           filterYear: year,
           visible: false,
           isLoading: false,
@@ -792,7 +792,7 @@ export const useDataStore = defineStore(
         });
 
         console.log('💡 解決方案：');
-        console.log('   1. 在左側圖層面板中開啟至少一個「事業 (○○年)」圖層');
+        console.log('   1. 在左側圖層面板中開啟至少一個年度圖層（例如「113年」）');
         console.log('   2. 等待圖層載入完成後再進行等時圈分析');
         console.log('   3. 或者可以考慮自動載入相關圖層');
 

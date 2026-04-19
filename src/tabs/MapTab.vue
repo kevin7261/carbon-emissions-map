@@ -208,6 +208,26 @@
         return `<div class="p-1" style="max-width: 320px; max-height: 400px; overflow: auto;"><div class="my-title-xs-gray pb-2">${escapeHtml(title)}</div>${rows.join('')}</div>`;
       };
 
+      /** 公司行號碳排點：hover 僅顯示事業名、地址、年份 */
+      const buildCarbonReportTooltipHtml = (props) => {
+        const pd = props.propertyData || {};
+        const name = pd.事業名稱 ?? props.name ?? '';
+        const addr = pd.地址 ?? '';
+        const year = pd.年度 ?? '';
+        const rows = [
+          ['事業名', name],
+          ['地址', addr],
+          ['年份', year],
+        ];
+        const body = rows
+          .map(
+            ([k, v]) =>
+              `<div class="pb-1"><div class="my-title-xs-gray">${escapeHtml(k)}</div><div class="my-content-xs-black">${escapeHtml(String(v))}</div></div>`
+          )
+          .join('');
+        return `<div class="p-1" style="max-width: 280px;">${body}</div>`;
+      };
+
       // 🎨 創建要素圖層函數 (Create Feature Layer Function)
       const createFeatureLayer = (layer) => {
         const dataLayerConfig = layer;
@@ -507,7 +527,11 @@
             } else {
               const detailHtml = buildAllPropertiesPopupHtml(feature.properties, layerName);
               leafletLayer.bindPopup(detailHtml);
-              leafletLayer.bindTooltip(detailHtml, {
+              const tooltipHtml =
+                dataLayerConfig.isCarbonReportYearLayer === true
+                  ? buildCarbonReportTooltipHtml(feature.properties)
+                  : detailHtml;
+              leafletLayer.bindTooltip(tooltipHtml, {
                 className: 'my-leaflet-tooltip',
                 direction: 'top',
                 sticky: true,
