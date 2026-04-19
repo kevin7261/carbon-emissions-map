@@ -30,10 +30,19 @@
         dataStore.toggleLayerVisibility(layerId);
       };
 
+      const groupAllLayersOn = (group) =>
+        group.groupLayers?.length > 0 && group.groupLayers.every((l) => l.visible);
+
+      const toggleAllInGroup = (groupName) => {
+        dataStore.toggleAllLayersInGroup(groupName);
+      };
+
       // 📤 將需要暴露給 <template> 使用的數據和方法返回
       return {
         layers,
         toggleLayer,
+        toggleAllInGroup,
+        groupAllLayersOn,
         layerListRef,
         getIcon,
       };
@@ -51,8 +60,22 @@
           :key="group.groupName"
           class="p-3"
         >
-          <div class="d-flex align-items-center pb-2">
+          <div class="d-flex align-items-center justify-content-between gap-2 pb-2">
             <div class="my-title-xs-gray">{{ group.groupName }}</div>
+            <div
+              v-if="group.groupName === '公司行號' && group.groupLayers?.length"
+              class="d-flex align-items-center justify-content-center flex-shrink-0"
+              :title="groupAllLayersOn(group) ? '關閉此分組所有圖層' : '開啟此分組所有圖層'"
+            >
+              <input
+                type="checkbox"
+                :id="'switch-group-' + group.groupName"
+                :checked="groupAllLayersOn(group)"
+                :disabled="group.groupLayers.some((l) => l.isLoading)"
+                @change="toggleAllInGroup(group.groupName)"
+              />
+              <label :for="'switch-group-' + group.groupName"></label>
+            </div>
           </div>
 
           <div v-for="layer in group.groupLayers" :key="layer.layerId" class="mb-1">

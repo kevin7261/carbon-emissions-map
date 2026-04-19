@@ -333,6 +333,53 @@ export const useDataStore = defineStore(
       }
     };
 
+    /**
+     * 公司行號等分組：一鍵全部開啟或全部關閉（若目前已全開則關閉，否則開啟並載入未載入圖層）
+     */
+    const toggleAllLayersInGroup = async (groupName) => {
+      const group = layers.value.find((g) => g.groupName === groupName);
+      if (!group?.groupLayers?.length) return;
+
+      const list = group.groupLayers;
+      const allVisible = list.every((l) => l.visible);
+      const targetVisible = !allVisible;
+
+      for (const layer of list) {
+        layer.visible = targetVisible;
+      }
+
+      if (!targetVisible) return;
+
+      const toLoad = list.filter(
+        (l) =>
+          l.visible &&
+          !l.isLoaded &&
+          !l.isLoading &&
+          l.loader &&
+          !l.isAnalysisLayer &&
+          !l.isIsochroneAnalysisLayer
+      );
+
+      await Promise.all(
+        toLoad.map(async (layer) => {
+          try {
+            layer.isLoading = true;
+            const result = await layer.loader(layer);
+            layer.geoJsonData = result.geoJsonData;
+            layer.tableData = result.tableData;
+            layer.summaryData = result.summaryData;
+            layer.legendData = result.legendData || null;
+            layer.isLoaded = true;
+          } catch (error) {
+            console.error(`Failed to load data for layer "${layer.layerName}":`, error);
+            layer.visible = false;
+          } finally {
+            layer.isLoading = false;
+          }
+        })
+      );
+    };
+
     // ------------------------------------------------------------
     // 選中的地圖物件
     const selectedFeature = ref(null);
@@ -2587,6 +2634,7 @@ export const useDataStore = defineStore(
       getAllLayers, // 獲取所有圖層的扁平陣列
       initReportYearLayers,
       toggleLayerVisibility,
+      toggleAllLayersInGroup,
       selectedFeature,
       setSelectedFeature,
       clearSelectedFeature,
