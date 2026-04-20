@@ -31,18 +31,40 @@
         dataStore.toggleLayerVisibility(layerId);
       };
 
-      const groupAllLayersOn = (group) => {
-        const panel = (group.groupLayers || []).filter((l) => l.showInLayerPanel !== false);
-        return panel.length > 0 && panel.every((l) => l.visible);
+      /** 事業統編群組：依輸入篩選圖層（子字串 match）；空白則顯示全部 */
+      const bizIdFilter = ref('');
+
+      const layerMatchesBizIdFilter = (layer) => {
+        const q = bizIdFilter.value.trim();
+        if (!q) return true;
+        const id = layer.filterBizId != null ? String(layer.filterBizId) : '';
+        return id.includes(q);
+      };
+
+      const panelLayersForGroup = (group) => {
+        const base = (group.groupLayers || []).filter((l) => l.showInLayerPanel !== false);
+        if (group.groupName !== '事業統編') return base;
+        return base.filter(layerMatchesBizIdFilter);
       };
 
       const toggleAllInGroup = (groupName) => {
+        if (groupName === '事業統編') {
+          const q = bizIdFilter.value.trim();
+          const layerPredicate =
+            q === '' ? undefined : (l) => layerMatchesBizIdFilter(l);
+          dataStore.toggleAllLayersInGroup(groupName, { layerPredicate });
+          return;
+        }
         dataStore.toggleAllLayersInGroup(groupName);
       };
 
-      /** 圖層面板可見的圖層數（與列表 v-show 一致） */
-      const groupPanelLayerCount = (group) =>
-        (group.groupLayers || []).filter((l) => l.showInLayerPanel !== false).length;
+      /** 圖層面板目前列出的圖層數（事業統編群組會依篩選變動） */
+      const groupPanelLayerCount = (group) => panelLayersForGroup(group).length;
+
+      const groupAllLayersOn = (group) => {
+        const panel = panelLayersForGroup(group);
+        return panel.length > 0 && panel.every((l) => l.visible);
+      };
 
       // 📤 將需要暴露給 <template> 使用的數據和方法返回
       return {
@@ -51,6 +73,8 @@
         toggleAllInGroup,
         groupAllLayersOn,
         groupPanelLayerCount,
+        panelLayersForGroup,
+        bizIdFilter,
         layerListRef,
         getIcon,
         truncateCompanyNameForLayerDisplay,
@@ -81,7 +105,7 @@
             <div
               v-if="
                 (group.groupName === '年份' || group.groupName === '事業統編') &&
-                group.groupLayers?.some((l) => l.showInLayerPanel !== false)
+                panelLayersForGroup(group).length > 0
               "
               class="d-flex align-items-center justify-content-center flex-shrink-0"
               :title="groupAllLayersOn(group) ? '關閉此分組所有圖層' : '開啟此分組所有圖層'"
@@ -90,18 +114,26 @@
                 type="checkbox"
                 :id="'switch-group-' + group.groupName"
                 :checked="groupAllLayersOn(group)"
-                :disabled="group.groupLayers
-                  .filter((l) => l.showInLayerPanel !== false)
-                  .some((l) => l.isLoading)"
+                :disabled="panelLayersForGroup(group).some((l) => l.isLoading)"
                 @change="toggleAllInGroup(group.groupName)"
               />
               <label :for="'switch-group-' + group.groupName"></label>
             </div>
           </div>
 
+          <div v-if="group.groupName === '事業統編'" class="pb-2">
+            <input
+              v-model="bizIdFilter"
+              type="text"
+              class="form-control form-control-sm"
+              placeholder="篩選事業統編…"
+              autocomplete="off"
+              @click.stop
+            />
+          </div>
+
           <div
-            v-for="layer in group.groupLayers"
-            v-show="layer.showInLayerPanel !== false"
+            v-for="layer in panelLayersForGroup(group)"
             :key="layer.layerId"
             class="mb-1"
           >

@@ -444,11 +444,19 @@ export const useDataStore = defineStore(
     /**
      * 指定分組（如「年份」「事業統編」）：一鍵全部開啟或全部關閉（若目前已全開則關閉，否則開啟並載入未載入圖層）
      */
-    const toggleAllLayersInGroup = async (groupName) => {
+    /**
+     * @param {string} groupName
+     * @param {{ layerPredicate?: (layer: object) => boolean }} [options] 若提供，只對通過 predicate 的圖層切換（其餘圖層不變）
+     */
+    const toggleAllLayersInGroup = async (groupName, options = {}) => {
+      const { layerPredicate } = options;
       const group = layers.value.find((g) => g.groupName === groupName);
       if (!group?.groupLayers?.length) return;
 
-      const list = group.groupLayers.filter((l) => l.showInLayerPanel !== false);
+      let list = group.groupLayers.filter((l) => l.showInLayerPanel !== false);
+      if (typeof layerPredicate === 'function') {
+        list = list.filter(layerPredicate);
+      }
       if (!list.length) return;
 
       const allVisible = list.every((l) => l.visible);
