@@ -2,6 +2,11 @@
   import DetailItem from '../components/DetailItem.vue';
   import { useDataStore } from '../stores/dataStore';
   import { computed } from 'vue';
+  import { formatCarbonReportFieldLabel } from '@/utils/dataProcessor.js';
+  import {
+    isCarbonEmissionTonCo2eKey,
+    formatCarbonEmissionQuantityHtml,
+  } from '@/utils/carbonEmissionDisplay.js';
 
   export default {
     name: 'PropertiesTab',
@@ -331,6 +336,7 @@
      * 定義資料格式化和處理方法
      */
     methods: {
+      isCarbonEmissionTonCo2eKey,
       /**
        * 📝 格式化屬性標籤 (Format Property Label)
        * 將英文屬性名稱轉換為中文顯示名稱
@@ -338,6 +344,18 @@
        * @param {string} key - 原始屬性名稱
        * @returns {string} 格式化後的顯示名稱
        */
+      formatPropertyLabel(key) {
+        if (isCarbonEmissionTonCo2eKey(key)) {
+          return formatCarbonReportFieldLabel(key);
+        }
+        return this.formatLabel(key);
+      },
+      formatPropertyValue(key, value) {
+        if (isCarbonEmissionTonCo2eKey(key)) {
+          return formatCarbonEmissionQuantityHtml(value);
+        }
+        return this.formatValue(value);
+      },
       formatLabel(key) {
         // 屬性名稱對照表，提供中文化顯示
         const labelMap = {
@@ -401,8 +419,9 @@
             <DetailItem
               v-for="(value, key) in selectedFeature.properties.propertyData"
               :key="key"
-              :label="formatLabel(key)"
-              :value="formatValue(value)"
+              :label="formatPropertyLabel(key)"
+              :value="formatPropertyValue(key, value)"
+              :is-html="isCarbonEmissionTonCo2eKey(key)"
             />
           </template>
 

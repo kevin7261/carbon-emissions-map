@@ -1956,6 +1956,19 @@ const REPORT_WITH_GOOGLE_LOCATION_TABLE_SKIP = new Set([
   '事業統編',
 ]);
 
+/** 與 DataTable 可見欄位相同（順序一致），供 MapTab popup／tooltip 共用 */
+export function getCarbonReportDataTableFieldKeys() {
+  return REPORT_WITH_GOOGLE_LOCATION_PROPERTY_ORDER.filter(
+    (k) => !REPORT_WITH_GOOGLE_LOCATION_TABLE_SKIP.has(k)
+  );
+}
+
+/** 與 DataTable 表頭相同：略去 (公噸CO2e) 顯示後綴 */
+export function formatCarbonReportFieldLabel(key) {
+  if (typeof key !== 'string') return key;
+  return key.replace(/\(公噸CO2e\)/g, '').trimEnd();
+}
+
 /**
  * 碳排報告（含 Google 緯經度）— public/data/csv/report_with_google_location.csv
  * 若 layer.filterYear 有值，只載入該年度資料（不同年度各自為一圖層）。

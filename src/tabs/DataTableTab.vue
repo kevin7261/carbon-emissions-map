@@ -1,6 +1,11 @@
 <script setup>
   import { ref, computed, defineEmits, onMounted, watch } from 'vue';
   import { useDataStore } from '@/stores/dataStore.js';
+  import { formatCarbonReportFieldLabel } from '@/utils/dataProcessor.js';
+  import {
+    isCarbonEmissionTonCo2eKey,
+    formatCarbonEmissionQuantityHtml,
+  } from '@/utils/carbonEmissionDisplay.js';
 
   const emit = defineEmits(['highlight-on-map']);
 
@@ -134,11 +139,8 @@
     return sortState.order === 'asc' ? 'fas fa-sort-up' : 'fas fa-sort-down';
   };
 
-  /** 表頭顯示用：略去單位後綴，欄位 key 與排序仍用原名 */
-  const formatDataTableColumnLabel = (key) => {
-    if (typeof key !== 'string') return key;
-    return key.replace(/\(公噸CO2e\)/g, '').trimEnd();
-  };
+  /** 表頭顯示（與碳排地圖 popup／tooltip 標籤一致；key 仍用原名排序） */
+  const formatDataTableColumnLabel = formatCarbonReportFieldLabel;
 
   /**
    * 🎯 處理地圖高亮顯示 (Handle Map Highlighting)
@@ -296,10 +298,7 @@
                   @click="handleHighlight(item, layer)"
                 >
                   <template v-for="column in getLayerColumns(layer)" :key="column">
-                    <td
-                      v-if="column !== 'color'"
-                      class="border-0 text-nowrap p-0 align-middle"
-                    >
+                    <td v-if="column !== 'color'" class="border-0 text-nowrap p-0 align-middle">
                       <div v-if="column === '#'" class="d-flex p-0">
                         <div
                           style="min-width: 6px"
@@ -311,6 +310,11 @@
                           {{ item[column] }}
                         </div>
                       </div>
+                      <div
+                        v-else-if="isCarbonEmissionTonCo2eKey(column)"
+                        class="my-content-xs-black px-3 py-2"
+                        v-html="formatCarbonEmissionQuantityHtml(item[column])"
+                      ></div>
                       <div v-else class="my-content-xs-black px-3 py-2">
                         {{ item[column] }}
                       </div>

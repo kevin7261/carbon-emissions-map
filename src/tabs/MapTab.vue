@@ -5,6 +5,14 @@
   import 'leaflet/dist/leaflet.css'; // 引入 Leaflet 預設樣式
   import { useDataStore } from '@/stores/dataStore.js'; // 引入資料存儲
   import { useDefineStore } from '@/stores/defineStore.js'; // 引入定義存儲
+  import {
+    getCarbonReportDataTableFieldKeys,
+    formatCarbonReportFieldLabel,
+  } from '@/utils/dataProcessor.js';
+  import {
+    isCarbonEmissionTonCo2eKey,
+    formatCarbonEmissionQuantityHtml,
+  } from '@/utils/carbonEmissionDisplay.js';
 
   // 🔧 修復 Leaflet 預設圖標問題 (Fix Leaflet Default Icon Issues)
   import icon from 'leaflet/dist/images/marker-icon.png'; // 引入標準標記圖標
@@ -210,24 +218,25 @@
         return `<div class="p-1" style="max-width: 320px; max-height: 400px; overflow: auto;"><div class="my-title-xs-gray pb-2">${escapeHtml(title)}</div>${rows.join('')}</div>`;
       };
 
-      /** 事業碳排年度圖層：hover 僅顯示事業名、地址、年份 */
-      const buildCarbonReportTooltipHtml = (props) => {
+      /**
+       * 事業碳排年度圖層：popup 與 hover tooltip 共用，欄位／順序／標籤與 DataTableTab 一致
+       * （不含 #、color；與 getCarbonReportDataTableFieldKeys 對齊）
+       */
+      const buildCarbonReportMapPanelHtml = (props, title) => {
         const pd = props.propertyData || {};
-        const name = pd.事業名稱 ?? props.name ?? '';
-        const addr = pd.地址 ?? '';
-        const year = pd.年度 ?? '';
-        const rows = [
-          ['事業名', name],
-          ['地址', addr],
-          ['年份', year],
-        ];
-        const body = rows
-          .map(
-            ([k, v]) =>
-              `<div class="pb-1"><div class="my-title-xs-gray">${escapeHtml(k)}</div><div class="my-content-xs-black">${escapeHtml(String(v))}</div></div>`
-          )
+        const keys = getCarbonReportDataTableFieldKeys();
+        const rows = keys
+          .map((k) => {
+            const v = pd[k];
+            if (v === undefined) return '';
+            const label = formatCarbonReportFieldLabel(k);
+            const valueInner = isCarbonEmissionTonCo2eKey(k)
+              ? formatCarbonEmissionQuantityHtml(v)
+              : escapeHtml(String(v));
+            return `<div class="pb-1"><div class="my-title-xs-gray">${escapeHtml(label)}</div><div class="my-content-xs-black">${valueInner}</div></div>`;
+          })
           .join('');
-        return `<div class="p-1" style="max-width: 280px;">${body}</div>`;
+        return `<div class="p-1" style="max-width: min(92vw, 520px); max-height: 400px; overflow: auto;"><div class="my-title-xs-gray pb-2">${escapeHtml(title)}</div>${rows}</div>`;
       };
 
       // 🎨 創建要素圖層函數 (Create Feature Layer Function)
@@ -531,13 +540,12 @@
                 );
               }
             } else {
-              const detailHtml = buildAllPropertiesPopupHtml(feature.properties, layerName);
-              leafletLayer.bindPopup(detailHtml);
-              const tooltipHtml =
+              const detailHtml =
                 dataLayerConfig.isCarbonReportYearLayer === true
-                  ? buildCarbonReportTooltipHtml(feature.properties)
-                  : detailHtml;
-              leafletLayer.bindTooltip(tooltipHtml, {
+                  ? buildCarbonReportMapPanelHtml(feature.properties, layerName)
+                  : buildAllPropertiesPopupHtml(feature.properties, layerName);
+              leafletLayer.bindPopup(detailHtml);
+              leafletLayer.bindTooltip(detailHtml, {
                 className: 'my-leaflet-tooltip',
                 direction: 'top',
                 sticky: true,
@@ -550,7 +558,10 @@
               // 滑鼠懸停事件
               mouseover: function () {
                 // 分析圖層的特殊處理
-                if (dataLayerConfig.isAnalysisLayer || feature.properties.layerId === 'analysis-layer') {
+                if (
+                  dataLayerConfig.isAnalysisLayer ||
+                  feature.properties.layerId === 'analysis-layer'
+                ) {
                   if (feature.properties.type === 'point-analysis') {
                     // 分析點不需要懸停效果，直接返回
                     return;
@@ -661,7 +672,10 @@
 
                 if (!isSelected) {
                   // 分析圖層的特殊處理
-                  if (dataLayerConfig.isAnalysisLayer || feature.properties.layerId === 'analysis-layer') {
+                  if (
+                    dataLayerConfig.isAnalysisLayer ||
+                    feature.properties.layerId === 'analysis-layer'
+                  ) {
                     if (feature.properties.type === 'point-analysis') {
                       // 分析點不需要恢復效果，直接返回
                       return;
@@ -725,7 +739,8 @@
               click: function () {
                 // 分析點不參與選擇，直接返回
                 if (
-                  (dataLayerConfig.isAnalysisLayer || feature.properties.layerId === 'analysis-layer') &&
+                  (dataLayerConfig.isAnalysisLayer ||
+                    feature.properties.layerId === 'analysis-layer') &&
                   feature.properties.type === 'point-analysis'
                 ) {
                   return;
@@ -747,7 +762,8 @@
               contextmenu: function (e) {
                 // 只有分析圖層的圓圈才顯示右鍵菜單
                 if (
-                  (dataLayerConfig.isAnalysisLayer || feature.properties.layerId === 'analysis-layer') &&
+                  (dataLayerConfig.isAnalysisLayer ||
+                    feature.properties.layerId === 'analysis-layer') &&
                   feature.properties.type === 'circle-analysis'
                 ) {
                   showAnalysisContextMenu(e.originalEvent, feature);
