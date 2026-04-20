@@ -2,10 +2,6 @@
   import { ref, computed, defineEmits, onMounted, watch } from 'vue';
   import { useDataStore } from '@/stores/dataStore.js';
   import { formatCarbonReportFieldLabel } from '@/utils/dataProcessor.js';
-  import {
-    isCarbonEmissionTonCo2eKey,
-    formatCarbonEmissionQuantityHtml,
-  } from '@/utils/carbonEmissionDisplay.js';
 
   const emit = defineEmits(['highlight-on-map']);
 
@@ -310,11 +306,6 @@
                           {{ item[column] }}
                         </div>
                       </div>
-                      <div
-                        v-else-if="isCarbonEmissionTonCo2eKey(column)"
-                        class="my-content-xs-black px-3 py-2"
-                        v-html="formatCarbonEmissionQuantityHtml(item[column])"
-                      ></div>
                       <div v-else class="my-content-xs-black px-3 py-2">
                         {{ item[column] }}
                       </div>

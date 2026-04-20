@@ -239,6 +239,27 @@
         return `<div class="p-1" style="max-width: min(92vw, 520px); max-height: 400px; overflow: auto;"><div class="my-title-xs-gray pb-2">${escapeHtml(title)}</div>${rows}</div>`;
       };
 
+      /** 碳排點 hover：僅 事業名稱、合計排放量、行業分類、地址（與 popup 完整欄位分開） */
+      const CARBON_HOVER_TOOLTIP_KEYS = [
+        '事業名稱',
+        '合計排放量(公噸CO2e)',
+        '行業分類',
+        '地址',
+      ];
+      const buildCarbonReportHoverTooltipHtml = (props) => {
+        const pd = props.propertyData || {};
+        const rows = CARBON_HOVER_TOOLTIP_KEYS.map((k) => {
+          const v = pd[k];
+          if (v === undefined || v === null || String(v).trim() === '') return '';
+          const label = formatCarbonReportFieldLabel(k);
+          const valueInner = isCarbonEmissionTonCo2eKey(k)
+            ? formatCarbonEmissionQuantityHtml(v)
+            : escapeHtml(String(v));
+          return `<div class="pb-1"><div class="my-title-xs-gray">${escapeHtml(label)}</div><div class="my-content-xs-black">${valueInner}</div></div>`;
+        }).filter(Boolean);
+        return `<div class="p-1" style="max-width: min(88vw, 320px);">${rows.join('')}</div>`;
+      };
+
       // 🎨 創建要素圖層函數 (Create Feature Layer Function)
       const createFeatureLayer = (layer) => {
         const dataLayerConfig = layer;
@@ -544,8 +565,12 @@
                 dataLayerConfig.isCarbonReportYearLayer === true
                   ? buildCarbonReportMapPanelHtml(feature.properties, layerName)
                   : buildAllPropertiesPopupHtml(feature.properties, layerName);
+              const tooltipHtml =
+                dataLayerConfig.isCarbonReportYearLayer === true
+                  ? buildCarbonReportHoverTooltipHtml(feature.properties)
+                  : detailHtml;
               leafletLayer.bindPopup(detailHtml);
-              leafletLayer.bindTooltip(detailHtml, {
+              leafletLayer.bindTooltip(tooltipHtml, {
                 className: 'my-leaflet-tooltip',
                 direction: 'top',
                 sticky: true,
