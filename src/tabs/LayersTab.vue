@@ -131,7 +131,7 @@
                 v-model="businessLayerSearch"
                 type="text"
                 class="form-control my-form-control-slim flex-grow-1"
-                placeholder="篩選統編或事業名稱…"
+                placeholder="篩選事業統編或事業名稱…"
                 autocomplete="off"
                 @click.stop
               />
