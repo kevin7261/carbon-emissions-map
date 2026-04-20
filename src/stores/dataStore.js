@@ -3,8 +3,8 @@ import { ref, computed } from 'vue';
 import { schemeCategory10 } from 'd3';
 
 import {
-  fetchReportCsvYears,
-  loadReportWithGoogleLocationData,
+  fetchReportCarbonRowsGroupedByYear,
+  buildCarbonReportPayloadFromRows,
 } from '../utils/dataProcessor.js';
 
 const REPORT_CSV_FILE = 'report_with_google_location.csv';
@@ -19,15 +19,12 @@ export const useDataStore = defineStore(
     const layers = ref([
       {
         groupName: '年份',
-        groupLayers: [],
-      },
-      {
-        groupName: '數據分析',
-        showInLayerPanel: false,
+        /** 內部圖層（分析／路徑）不顯示在圖層列表；年度圖層由 initReportYearLayers 附加 */
         groupLayers: [
           {
             layerId: 'analysis-layer',
             layerName: '數據分析圖層',
+            showInLayerPanel: false,
             visible: true, // 預設開啟
             isLoading: false,
             isLoaded: true, // 始終載入
@@ -52,7 +49,6 @@ export const useDataStore = defineStore(
             fieldName: null,
             isAnalysisLayer: true, // 標記為分析圖層
           },
-          // 🚗 等時圈分析圖層 - 基於真實交通網路的可達性分析
           {
             /**
              * 等時圈分析圖層配置
@@ -70,12 +66,13 @@ export const useDataStore = defineStore(
              */
             layerId: 'isochrone-analysis-layer',
             layerName: '等時圈分析圖層',
+            showInLayerPanel: false,
             visible: true, // 預設開啟，讓使用者可以立即使用
             isLoading: false, // 初始無加載狀態
             isLoaded: true, // 標記為已載入（分析圖層總是可用的）
             type: 'isochrone-analysis', // 特殊圖層類型
             shape: 'mixed', // 混合形狀：包含點標記和多邊形/圓圈
-            colorName: 'blue', // 藍色主題，與數據分析圖層的紅色區分
+            colorName: 'blue',
 
             // GeoJSON 數據容器，存儲所有等時圈分析結果
             geoJsonData: {
@@ -123,6 +120,7 @@ export const useDataStore = defineStore(
              */
             layerId: 'route-planning-layer',
             layerName: '路徑規劃圖層',
+            showInLayerPanel: false,
             visible: true, // 預設開啟
             isLoading: false, // 初始無加載狀態
             isLoaded: true, // 標記為已載入（路徑規劃圖層總是可用的）
@@ -172,6 +170,7 @@ export const useDataStore = defineStore(
              */
             layerId: 'route-optimization-layer',
             layerName: '路徑優化圖層',
+            showInLayerPanel: false,
             visible: true, // 預設開啟
             isLoading: false, // 初始無加載狀態
             isLoaded: true, // 標記為已載入（路徑優化圖層總是可用的）
@@ -233,43 +232,79 @@ export const useDataStore = defineStore(
       return allLayers;
     };
 
+    /** 碳排 CSV 僅 fetch 一次後，各年份圖層由此取預組 payload（開關圖層不再讀檔） */
+    let carbonReportYearPayloadByYear = Object.create(null);
+
+    const loadCarbonReportYearFromPrecache = (layer) => {
+      const y = layer.filterYear != null ? String(layer.filterYear).trim() : '';
+      const payload = carbonReportYearPayloadByYear[y];
+      if (!payload) {
+        return Promise.reject(new Error(`無預載年份資料: ${y || '(未指定)'}`));
+      }
+      return Promise.resolve(payload);
+    };
+
     /**
-     * 讀取碳排 CSV 的「年度」欄，為每個年度建立一個事業點圖層（共用同一檔案、載入時依 filterYear 篩選）。
+     * 讀取碳排 CSV 一次，依「年度」分組並預建各年 geoJson／表格／摘要；每個年度一個事業點圖層，開關時僅套用預載資料。
      */
     const initReportYearLayers = async () => {
       try {
-        const years = await fetchReportCsvYears(REPORT_CSV_FILE);
+        const grouped = await fetchReportCarbonRowsGroupedByYear(REPORT_CSV_FILE);
+        const { years, rowsByYear, meta } = grouped;
         const infra = layers.value.find((g) => g.groupName === '年份');
         if (!infra) return;
-        if (years.length === 0) {
+
+        const preserved = (infra.groupLayers || []).filter(
+          (l) =>
+            !l.isCarbonReportYearLayer && !String(l.layerId || '').startsWith('report-year')
+        );
+
+        carbonReportYearPayloadByYear = Object.create(null);
+
+        if (!meta || years.length === 0) {
           console.warn('碳排 CSV 中未解析到任何年度');
-          infra.groupLayers = [];
+          infra.groupLayers = preserved;
           primaryCarbonReportLayerId.value = null;
           return;
         }
         const palette = schemeCategory10;
-        infra.groupLayers = years.map((year, i) => ({
-          layerId: `report-year-${year}`,
-          layerName: `${year}年`,
-          filterYear: year,
-          visible: false,
-          isLoading: false,
-          isLoaded: false,
-          type: 'point',
-          shape: 'circle',
-          layerColor: palette[i % palette.length],
-          geoJsonData: null,
-          summaryData: null,
-          tableData: null,
-          legendData: null,
-          loader: loadReportWithGoogleLocationData,
-          fileName: REPORT_CSV_FILE,
-          fieldName: null,
-          isCarbonReportYearLayer: true,
-        }));
+        const yearLayers = years.map((year, i) => {
+          const layerStub = {
+            layerId: `report-year-${year}`,
+            layerName: `${year}年`,
+            filterYear: year,
+            layerColor: palette[i % palette.length],
+          };
+          carbonReportYearPayloadByYear[year] = buildCarbonReportPayloadFromRows(
+            layerStub,
+            meta,
+            rowsByYear[year] ?? []
+          );
+          return {
+            layerId: layerStub.layerId,
+            layerName: layerStub.layerName,
+            filterYear: year,
+            visible: false,
+            isLoading: false,
+            isLoaded: false,
+            type: 'point',
+            shape: 'circle',
+            layerColor: layerStub.layerColor,
+            geoJsonData: null,
+            summaryData: null,
+            tableData: null,
+            legendData: null,
+            loader: loadCarbonReportYearFromPrecache,
+            fileName: REPORT_CSV_FILE,
+            fieldName: null,
+            isCarbonReportYearLayer: true,
+          };
+        });
+        infra.groupLayers = [...preserved, ...yearLayers];
         primaryCarbonReportLayerId.value = `report-year-${years[0]}`;
       } catch (e) {
         console.error('初始化年度事業圖層失敗:', e);
+        carbonReportYearPayloadByYear = Object.create(null);
         primaryCarbonReportLayerId.value = null;
       }
     };
@@ -328,7 +363,9 @@ export const useDataStore = defineStore(
       const group = layers.value.find((g) => g.groupName === groupName);
       if (!group?.groupLayers?.length) return;
 
-      const list = group.groupLayers;
+      const list = group.groupLayers.filter((l) => l.showInLayerPanel !== false);
+      if (!list.length) return;
+
       const allVisible = list.every((l) => l.visible);
       const targetVisible = !allVisible;
 

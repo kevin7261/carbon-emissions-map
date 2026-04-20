@@ -30,8 +30,10 @@
         dataStore.toggleLayerVisibility(layerId);
       };
 
-      const groupAllLayersOn = (group) =>
-        group.groupLayers?.length > 0 && group.groupLayers.every((l) => l.visible);
+      const groupAllLayersOn = (group) => {
+        const panel = (group.groupLayers || []).filter((l) => l.showInLayerPanel !== false);
+        return panel.length > 0 && panel.every((l) => l.visible);
+      };
 
       const toggleAllInGroup = (groupName) => {
         dataStore.toggleAllLayersInGroup(groupName);
@@ -63,7 +65,10 @@
           <div class="d-flex align-items-center justify-content-between gap-2 pb-2">
             <div class="my-title-xs-gray">{{ group.groupName }}</div>
             <div
-              v-if="group.groupName === '年份' && group.groupLayers?.length"
+              v-if="
+                group.groupName === '年份' &&
+                group.groupLayers?.some((l) => l.showInLayerPanel !== false)
+              "
               class="d-flex align-items-center justify-content-center flex-shrink-0"
               :title="groupAllLayersOn(group) ? '關閉此分組所有圖層' : '開啟此分組所有圖層'"
             >
@@ -71,14 +76,21 @@
                 type="checkbox"
                 :id="'switch-group-' + group.groupName"
                 :checked="groupAllLayersOn(group)"
-                :disabled="group.groupLayers.some((l) => l.isLoading)"
+                :disabled="group.groupLayers
+                  .filter((l) => l.showInLayerPanel !== false)
+                  .some((l) => l.isLoading)"
                 @change="toggleAllInGroup(group.groupName)"
               />
               <label :for="'switch-group-' + group.groupName"></label>
             </div>
           </div>
 
-          <div v-for="layer in group.groupLayers" :key="layer.layerId" class="mb-1">
+          <div
+            v-for="layer in group.groupLayers"
+            v-show="layer.showInLayerPanel !== false"
+            :key="layer.layerId"
+            class="mb-1"
+          >
             <!-- 圖層卡片 -->
             <div
               class="btn rounded-0 border-0 d-flex shadow-sm my-bgcolor-white-hover p-0"

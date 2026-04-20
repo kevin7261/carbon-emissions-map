@@ -239,9 +239,10 @@
         return `<div class="p-1" style="max-width: min(92vw, 520px); max-height: 400px; overflow: auto;"><div class="my-title-xs-gray pb-2">${escapeHtml(title)}</div>${rows}</div>`;
       };
 
-      /** 碳排點 hover：僅 事業名稱、合計排放量、行業分類、地址（與 popup 完整欄位分開） */
+      /** 碳排點 hover（Leaflet tooltip）：精簡欄位，與資料表欄位對齊並含事業統編 */
       const CARBON_HOVER_TOOLTIP_KEYS = [
         '事業名稱',
+        '事業統編',
         '合計排放量(公噸CO2e)',
         '行業分類',
         '地址',
@@ -1597,7 +1598,7 @@
     border: none !important;
   }
 
-  /* 資料點 tooltip：與 popup 相同內容、可捲動多欄位 */
+  /* 資料點 tooltip（hover）：精簡欄位；popup 仍為完整欄位 */
   :deep(.leaflet-tooltip.my-leaflet-tooltip) {
     background: var(--my-color-white);
     color: var(--my-color-gray-800);

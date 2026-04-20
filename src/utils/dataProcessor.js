@@ -1904,8 +1904,18 @@ export async function load41Data(layer) {
 
 /**
  * 掃描碳排報告 CSV，回傳出現過的「年度」值（民國年），由新到舊排序。
+ * 僅統計「緯度／經度」可解析為數字的列，與 {@link fetchReportCarbonRowsGroupedByYear} 一致。
  */
 export async function fetchReportCsvYears(fileName) {
+  const { years } = await fetchReportCarbonRowsGroupedByYear(fileName);
+  return years;
+}
+
+/**
+ * 讀取碳排報告 CSV 一次，依「年度」分組列資料（皆已通過緯經度檢查）。
+ * 另回傳 `orderedValidRows`：檔案順序下所有座標有效列，供無年度篩選時使用。
+ */
+export async function fetchReportCarbonRowsGroupedByYear(fileName) {
   const filePath = `/carbon-emissions-map/data/csv/${fileName}`;
   const response = await fetch(filePath);
   if (!response.ok) {
@@ -1914,21 +1924,33 @@ export async function fetchReportCsvYears(fileName) {
   const csvText = await response.text();
   const lines = csvText.split(/\r?\n/).filter((l) => l.length > 0);
   if (lines.length < 2) {
-    return [];
+    return { years: [], rowsByYear: {}, meta: null, orderedValidRows: [] };
   }
   const headers = parseCsvLine(lines[0]).map((h) => h.trim());
+  const headerIndex = Object.fromEntries(headers.map((h, idx) => [h, idx]));
   const yearIdx = headers.indexOf('年度');
+  const latIdx = headers.indexOf('緯度');
+  const lonIdx = headers.indexOf('經度');
   if (yearIdx < 0) {
     console.warn('CSV 缺少「年度」欄位');
-    return [];
   }
-  const years = new Set();
-  for (let i = 1; i < lines.length; i++) {
-    const row = parseCsvLine(lines[i]);
-    const y = row[yearIdx] != null ? String(row[yearIdx]).trim() : '';
-    if (y) years.add(y);
+
+  const dataRows = lines.slice(1).map((line) => parseCsvLine(line));
+  const rowsByYear = {};
+  const orderedValidRows = [];
+  for (const row of dataRows) {
+    const lat = latIdx >= 0 ? parseFloat(row[latIdx]) : NaN;
+    const lon = lonIdx >= 0 ? parseFloat(row[lonIdx]) : NaN;
+    if (isNaN(lat) || isNaN(lon)) continue;
+    orderedValidRows.push(row);
+    const y = yearIdx >= 0 ? String(row[yearIdx] ?? '').trim() : '';
+    if (!y) continue;
+    if (!rowsByYear[y]) rowsByYear[y] = [];
+    rowsByYear[y].push(row);
   }
-  return Array.from(years).sort((a, b) => Number(b) - Number(a));
+  const years = Object.keys(rowsByYear).sort((a, b) => Number(b) - Number(a));
+  const meta = { headers, headerIndex, yearIdx, latIdx, lonIdx };
+  return { years, rowsByYear, meta, orderedValidRows };
 }
 
 /** 事業碳排 CSV 屬性顯示順序（屬性分頁、地圖 popup 依此；DataTable 見下述排除清單） */
@@ -1947,14 +1969,8 @@ const REPORT_WITH_GOOGLE_LOCATION_PROPERTY_ORDER = [
   '經度',
 ];
 
-/** DataTable 不顯示（年度／統編／座標／地址等由圖層或屬性分頁呈現） */
-const REPORT_WITH_GOOGLE_LOCATION_TABLE_SKIP = new Set([
-  '年度',
-  '緯度',
-  '經度',
-  '地址',
-  '事業統編',
-]);
+/** DataTable 不顯示（年度／座標／地址等；事業統編在表與地圖提示中顯示） */
+const REPORT_WITH_GOOGLE_LOCATION_TABLE_SKIP = new Set(['年度', '緯度', '經度', '地址']);
 
 /** 與 DataTable 可見欄位相同（順序一致），供 MapTab popup／tooltip 共用 */
 export function getCarbonReportDataTableFieldKeys() {
@@ -1970,147 +1986,132 @@ export function formatCarbonReportFieldLabel(key) {
 }
 
 /**
+ * 由已解析的列與圖層樣式，組成事業碳排圖層的 geoJson／table／summary（不發網路請求）。
+ */
+export function buildCarbonReportPayloadFromRows(layer, meta, rows) {
+  if (!meta) {
+    return {
+      geoJsonData: { type: 'FeatureCollection', features: [] },
+      tableData: [],
+      summaryData: { totalCount: 0, districtCount: [] },
+    };
+  }
+  const { headers, headerIndex, latIdx, lonIdx } = meta;
+  const layerId = layer.layerId;
+  const colorName = layer.colorName;
+  const layerColorHex =
+    layer.layerColor != null && String(layer.layerColor).trim() !== ''
+      ? String(layer.layerColor).trim()
+      : null;
+
+  const geoJsonData = {
+    type: 'FeatureCollection',
+    features: (rows || []).map((row, index) => {
+      const lat = latIdx >= 0 ? parseFloat(row[latIdx]) : NaN;
+      const lon = lonIdx >= 0 ? parseFloat(row[lonIdx]) : NaN;
+      const id = index + 1;
+
+      const propertyData = {};
+      for (const key of REPORT_WITH_GOOGLE_LOCATION_PROPERTY_ORDER) {
+        const idx = headerIndex[key];
+        if (idx !== undefined) {
+          propertyData[key] = row[idx] !== undefined && row[idx] !== null ? row[idx] : '';
+        }
+      }
+      for (let i = 0; i < headers.length; i++) {
+        const h = headers[i];
+        if (!h || Object.prototype.hasOwnProperty.call(propertyData, h)) continue;
+        propertyData[h] = row[i] !== undefined && row[i] !== null ? row[i] : '';
+      }
+
+      const 事業名稱 = propertyData['事業名稱'] ?? '';
+
+      const fillColor =
+        layerColorHex ||
+        getComputedStyle(document.documentElement)
+          .getPropertyValue(`--my-color-${colorName || 'blue'}`)
+          .trim();
+
+      const tableData = {
+        '#': id,
+        color: fillColor,
+      };
+      for (const key of REPORT_WITH_GOOGLE_LOCATION_PROPERTY_ORDER) {
+        if (REPORT_WITH_GOOGLE_LOCATION_TABLE_SKIP.has(key)) continue;
+        if (headerIndex[key] !== undefined) {
+          tableData[key] = propertyData[key];
+        }
+      }
+
+      return {
+        type: 'Feature',
+        geometry: {
+          type: 'Point',
+          coordinates: [lon, lat],
+        },
+        properties: {
+          id,
+          layerId,
+          layerName: layer.layerName,
+          name: 事業名稱,
+          fillColor,
+          propertyData,
+          popupOnlyPropertyData: true,
+          popupData: { name: 事業名稱 },
+          tableData,
+        },
+      };
+    }),
+  };
+
+  const tableData = geoJsonData.features.map((feature) => ({
+    ...feature.properties.tableData,
+  }));
+
+  const districtCounts = {};
+  geoJsonData.features.forEach((feature) => {
+    const district = feature.properties.propertyData['縣市別'];
+    if (district) {
+      districtCounts[district] = (districtCounts[district] || 0) + 1;
+    }
+  });
+
+  const districtCount = Object.entries(districtCounts)
+    .map(([name, count]) => ({ name, count }))
+    .sort((a, b) => b.count - a.count);
+
+  const summaryData = {
+    totalCount: geoJsonData.features.length,
+    districtCount,
+  };
+
+  return {
+    geoJsonData,
+    tableData,
+    summaryData,
+  };
+}
+
+/**
  * 碳排報告（含 Google 緯經度）— public/data/csv/report_with_google_location.csv
  * 若 layer.filterYear 有值，只載入該年度資料（不同年度各自為一圖層）。
+ * 仍會每次請求 CSV；年度圖層請改用以 {@link fetchReportCarbonRowsGroupedByYear} 預載＋
+ * {@link buildCarbonReportPayloadFromRows} 指派至圖層，避免重複 fetch。
  */
 export async function loadReportWithGoogleLocationData(layer) {
   try {
-    const layerId = layer.layerId;
-    const colorName = layer.colorName;
-    const layerColorHex =
-      layer.layerColor != null && String(layer.layerColor).trim() !== ''
-        ? String(layer.layerColor).trim()
-        : null;
     const filterYear =
       layer.filterYear != null && String(layer.filterYear).trim() !== ''
         ? String(layer.filterYear).trim()
         : null;
 
-    const filePath = `/carbon-emissions-map/data/csv/${layer.fileName}`;
-    const response = await fetch(filePath);
-
-    if (!response.ok) {
-      console.error('HTTP 錯誤:', {
-        status: response.status,
-        statusText: response.statusText,
-        url: response.url,
-      });
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-
-    const csvText = await response.text();
-    const lines = csvText.split(/\r?\n/).filter((l) => l.length > 0);
-    if (lines.length < 2) {
+    const grouped = await fetchReportCarbonRowsGroupedByYear(layer.fileName);
+    if (!grouped.meta) {
       throw new Error('report_with_google_location.csv 沒有資料列');
     }
-
-    const headers = parseCsvLine(lines[0]).map((h) => h.trim());
-    const headerIndex = Object.fromEntries(headers.map((h, idx) => [h, idx]));
-    const yearIdx = headers.indexOf('年度');
-    const latIdx = headers.indexOf('緯度');
-    const lonIdx = headers.indexOf('經度');
-
-    const dataRows = lines.slice(1).map((line) => parseCsvLine(line));
-    const filteredRows = dataRows.filter((row) => {
-      const lat = latIdx >= 0 ? parseFloat(row[latIdx]) : NaN;
-      const lon = lonIdx >= 0 ? parseFloat(row[lonIdx]) : NaN;
-      if (isNaN(lat) || isNaN(lon)) return false;
-      if (filterYear != null) {
-        const y = yearIdx >= 0 ? String(row[yearIdx] ?? '').trim() : '';
-        if (y !== filterYear) return false;
-      }
-      return true;
-    });
-
-    const geoJsonData = {
-      type: 'FeatureCollection',
-      features: filteredRows.map((row, index) => {
-          const lat = latIdx >= 0 ? parseFloat(row[latIdx]) : NaN;
-          const lon = lonIdx >= 0 ? parseFloat(row[lonIdx]) : NaN;
-          const id = index + 1;
-
-          /** 固定欄位順序（與 CSV 欄位對應；表頭若有額外欄位則接在後面） */
-          const propertyData = {};
-          for (const key of REPORT_WITH_GOOGLE_LOCATION_PROPERTY_ORDER) {
-            const idx = headerIndex[key];
-            if (idx !== undefined) {
-              propertyData[key] =
-                row[idx] !== undefined && row[idx] !== null ? row[idx] : '';
-            }
-          }
-          for (let i = 0; i < headers.length; i++) {
-            const h = headers[i];
-            if (!h || Object.prototype.hasOwnProperty.call(propertyData, h)) continue;
-            propertyData[h] = row[i] !== undefined && row[i] !== null ? row[i] : '';
-          }
-
-          const 事業名稱 = propertyData['事業名稱'] ?? '';
-
-          const fillColor =
-            layerColorHex ||
-            getComputedStyle(document.documentElement)
-              .getPropertyValue(`--my-color-${colorName || 'blue'}`)
-              .trim();
-
-          const tableData = {
-            '#': id,
-            color: fillColor,
-          };
-          for (const key of REPORT_WITH_GOOGLE_LOCATION_PROPERTY_ORDER) {
-            if (REPORT_WITH_GOOGLE_LOCATION_TABLE_SKIP.has(key)) continue;
-            if (headerIndex[key] !== undefined) {
-              tableData[key] = propertyData[key];
-            }
-          }
-
-          return {
-            type: 'Feature',
-            geometry: {
-              type: 'Point',
-              coordinates: [lon, lat],
-            },
-            properties: {
-              id,
-              layerId,
-              layerName: layer.layerName,
-              name: 事業名稱,
-              fillColor,
-              propertyData,
-              /** MapTab popup 僅列出 propertyData，不附加 id / layerId 等 */
-              popupOnlyPropertyData: true,
-              popupData: { name: 事業名稱 },
-              tableData,
-            },
-          };
-      }),
-    };
-
-    const tableData = geoJsonData.features.map((feature) => ({
-      ...feature.properties.tableData,
-    }));
-
-    const districtCounts = {};
-    geoJsonData.features.forEach((feature) => {
-      const district = feature.properties.propertyData['縣市別'];
-      if (district) {
-        districtCounts[district] = (districtCounts[district] || 0) + 1;
-      }
-    });
-
-    const districtCount = Object.entries(districtCounts)
-      .map(([name, count]) => ({ name, count }))
-      .sort((a, b) => b.count - a.count);
-
-    const summaryData = {
-      totalCount: geoJsonData.features.length,
-      districtCount,
-    };
-
-    return {
-      geoJsonData,
-      tableData,
-      summaryData,
-    };
+    const rows =
+      filterYear != null ? grouped.rowsByYear[filterYear] ?? [] : grouped.orderedValidRows;
+    return buildCarbonReportPayloadFromRows(layer, grouped.meta, rows);
   } catch (error) {
     console.error('❌ 數據載入失敗:', error);
     throw error;
