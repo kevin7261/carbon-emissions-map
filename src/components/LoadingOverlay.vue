@@ -54,7 +54,7 @@
     >
       <!-- ⏳ 載入動畫圓環 (Loading Animation Spinner) -->
       <!-- Bootstrap 提供的圓形載入動畫，表示系統正在處理請求 -->
-      <div class="spinner-border text-primary mb-3" style="width: 2rem; height: 2rem" role="status">
+      <div class="spinner-border my-color-blue mb-3" style="width: 2rem; height: 2rem" role="status">
         <!-- 🔍 無障礙輔助文字 (Screen Reader Text) -->
         <!-- 為螢幕閱讀器提供的載入狀態說明 -->
         <span class="visually-hidden">載入中...</span>
@@ -72,13 +72,13 @@
           <!-- 📊 進度條滑塊 (Progress Bar) -->
           <!-- 根據 progress 屬性動態調整寬度，顯示載入完成百分比 -->
           <div
-            class="progress-bar bg-primary d-flex align-items-center justify-content-center"
+            class="progress-bar my-progress-bar-fill d-flex align-items-center justify-content-center"
             role="progressbar"
             :style="{ width: progress + '%' }"
             :aria-valuenow="progress"
             aria-valuemin="0"
             aria-valuemax="100"
-            style="transition: width 0.3s ease; font-size: 0.75rem; color: white"
+            style="transition: width 0.3s ease; font-size: 0.75rem; color: var(--my-color-white)"
           >
             {{ Math.round(progress) }}%
           </div>

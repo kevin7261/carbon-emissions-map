@@ -140,7 +140,7 @@
               />
               <button
                 type="button"
-                class="btn btn-outline-secondary btn-sm text-nowrap flex-shrink-0"
+                class="btn btn-sm my-btn-outline-gray text-nowrap flex-shrink-0"
                 title="清空篩選"
                 :disabled="!businessLayerSearch.trim()"
                 @click.stop="clearBusinessLayerSearch"

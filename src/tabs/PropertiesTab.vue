@@ -624,7 +624,7 @@
                 class="mb-3 p-2 border rounded"
               >
                 <div class="my-content-sm-black fw-bold mb-2">
-                  <span class="badge bg-primary me-2">{{ point.order }}</span>
+                  <span class="badge my-badge-blue me-2">{{ point.order }}</span>
                   {{ point.name }}
                 </div>
                 <DetailItem label="順序" :value="`第 ${point.order} 個優化點`" />
@@ -647,17 +647,17 @@
             >
               <hr class="my-3" />
               <div class="my-title-xs-gray mb-3">優化訪問順序</div>
-              <div class="mb-3 p-2 border rounded bg-light">
+              <div class="mb-3 p-2 border rounded my-bgcolor-gray-50">
                 <div
                   v-for="(point, index) in routeOptimizationDetails.optimizedPointInfo"
                   :key="index"
                   class="mb-2"
                 >
-                  <span class="badge bg-success me-2"
+                  <span class="badge my-badge-green me-2"
                     >訪問順序 {{ point.visitOrder || index + 1 }}</span
                   >
-                  <span class="badge bg-primary me-2">優化點 {{ point.order }}</span>
-                  <span v-if="point.stepType" class="badge bg-secondary me-2">{{
+                  <span class="badge my-badge-blue me-2">優化點 {{ point.order }}</span>
+                  <span v-if="point.stepType" class="badge my-badge-neutral me-2">{{
                     point.stepType === 'start'
                       ? '起點'
                       : point.stepType === 'end'
@@ -668,7 +668,7 @@
                   }}</span>
                   <span class="my-content-sm-black">
                     {{ point.name }}
-                    <small class="text-muted ms-2">
+                    <small class="my-content-xs-gray ms-2">
                       ({{ point.coordinates[1].toFixed(6) }}, {{ point.coordinates[0].toFixed(6) }})
                     </small>
                   </span>
