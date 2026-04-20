@@ -1912,7 +1912,7 @@ export async function fetchReportCsvYears(fileName) {
 }
 
 /**
- * 讀取碳排報告 CSV 一次，依「年度」分組列資料（皆已通過緯經度檢查）。
+ * 讀取碳排報告 CSV 一次，依「年度」與「事業統編」分組列資料（皆已通過緯經度檢查）。
  * 另回傳 `orderedValidRows`：檔案順序下所有座標有效列，供無年度篩選時使用。
  */
 export async function fetchReportCarbonRowsGroupedByYear(fileName) {
@@ -1924,19 +1924,31 @@ export async function fetchReportCarbonRowsGroupedByYear(fileName) {
   const csvText = await response.text();
   const lines = csvText.split(/\r?\n/).filter((l) => l.length > 0);
   if (lines.length < 2) {
-    return { years: [], rowsByYear: {}, meta: null, orderedValidRows: [] };
+    return {
+      years: [],
+      rowsByYear: {},
+      bizIds: [],
+      rowsByBizId: {},
+      meta: null,
+      orderedValidRows: [],
+    };
   }
   const headers = parseCsvLine(lines[0]).map((h) => h.trim());
   const headerIndex = Object.fromEntries(headers.map((h, idx) => [h, idx]));
   const yearIdx = headers.indexOf('年度');
+  const bizIdx = headers.indexOf('事業統編');
   const latIdx = headers.indexOf('緯度');
   const lonIdx = headers.indexOf('經度');
   if (yearIdx < 0) {
     console.warn('CSV 缺少「年度」欄位');
   }
+  if (bizIdx < 0) {
+    console.warn('CSV 缺少「事業統編」欄位');
+  }
 
   const dataRows = lines.slice(1).map((line) => parseCsvLine(line));
   const rowsByYear = {};
+  const rowsByBizId = {};
   const orderedValidRows = [];
   for (const row of dataRows) {
     const lat = latIdx >= 0 ? parseFloat(row[latIdx]) : NaN;
@@ -1944,13 +1956,20 @@ export async function fetchReportCarbonRowsGroupedByYear(fileName) {
     if (isNaN(lat) || isNaN(lon)) continue;
     orderedValidRows.push(row);
     const y = yearIdx >= 0 ? String(row[yearIdx] ?? '').trim() : '';
-    if (!y) continue;
-    if (!rowsByYear[y]) rowsByYear[y] = [];
-    rowsByYear[y].push(row);
+    if (y) {
+      if (!rowsByYear[y]) rowsByYear[y] = [];
+      rowsByYear[y].push(row);
+    }
+    const bid = bizIdx >= 0 ? String(row[bizIdx] ?? '').trim() : '';
+    if (bid) {
+      if (!rowsByBizId[bid]) rowsByBizId[bid] = [];
+      rowsByBizId[bid].push(row);
+    }
   }
   const years = Object.keys(rowsByYear).sort((a, b) => Number(b) - Number(a));
+  const bizIds = Object.keys(rowsByBizId).sort((a, b) => a.localeCompare(b, 'zh-Hant'));
   const meta = { headers, headerIndex, yearIdx, latIdx, lonIdx };
-  return { years, rowsByYear, meta, orderedValidRows };
+  return { years, rowsByYear, bizIds, rowsByBizId, meta, orderedValidRows };
 }
 
 /** 事業碳排 CSV 屬性顯示順序（屬性分頁、地圖 popup 依此；DataTable 見下述排除清單） */
@@ -1969,8 +1988,8 @@ const REPORT_WITH_GOOGLE_LOCATION_PROPERTY_ORDER = [
   '經度',
 ];
 
-/** DataTable 不顯示（年度／座標／地址等；事業統編在表與地圖提示中顯示） */
-const REPORT_WITH_GOOGLE_LOCATION_TABLE_SKIP = new Set(['年度', '緯度', '經度', '地址']);
+/** DataTable 不顯示（座標／地址等；年度與事業統編在表中顯示） */
+const REPORT_WITH_GOOGLE_LOCATION_TABLE_SKIP = new Set(['緯度', '經度', '地址']);
 
 /** 與 DataTable 可見欄位相同（順序一致），供 MapTab popup／tooltip 共用 */
 export function getCarbonReportDataTableFieldKeys() {
@@ -1983,6 +2002,15 @@ export function getCarbonReportDataTableFieldKeys() {
 export function formatCarbonReportFieldLabel(key) {
   if (typeof key !== 'string') return key;
   return key.replace(/\(公噸CO2e\)/g, '').trimEnd();
+}
+
+/** 圖層名稱用：若有「股份有限公司」，只保留其前方文字（不含該六字與之後內容）；無則原樣回傳。 */
+export function truncateCompanyNameForLayerDisplay(name) {
+  if (typeof name !== 'string' || !name) return name;
+  const marker = '股份有限公司';
+  const i = name.indexOf(marker);
+  if (i < 0) return name;
+  return name.slice(0, i).trimEnd();
 }
 
 /**
@@ -2095,8 +2123,7 @@ export function buildCarbonReportPayloadFromRows(layer, meta, rows) {
 /**
  * 碳排報告（含 Google 緯經度）— public/data/csv/report_with_google_location.csv
  * 若 layer.filterYear 有值，只載入該年度資料（不同年度各自為一圖層）。
- * 仍會每次請求 CSV；年度圖層請改用以 {@link fetchReportCarbonRowsGroupedByYear} 預載＋
- * {@link buildCarbonReportPayloadFromRows} 指派至圖層，避免重複 fetch。
+ * 仍會每次請求 CSV；年度／事業統編圖層請改以 store 預載＋ {@link buildCarbonReportPayloadFromRows}，避免重複 fetch。
  */
 export async function loadReportWithGoogleLocationData(layer) {
   try {

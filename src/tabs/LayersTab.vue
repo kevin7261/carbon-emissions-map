@@ -1,6 +1,7 @@
 <script>
   import { computed, ref } from 'vue';
   import { useDataStore } from '@/stores/dataStore.js';
+  import { truncateCompanyNameForLayerDisplay } from '@/utils/dataProcessor.js';
   import { getIcon } from '../utils/utils.js';
 
   export default {
@@ -39,14 +40,20 @@
         dataStore.toggleAllLayersInGroup(groupName);
       };
 
+      /** 圖層面板可見的圖層數（與列表 v-show 一致） */
+      const groupPanelLayerCount = (group) =>
+        (group.groupLayers || []).filter((l) => l.showInLayerPanel !== false).length;
+
       // 📤 將需要暴露給 <template> 使用的數據和方法返回
       return {
         layers,
         toggleLayer,
         toggleAllInGroup,
         groupAllLayersOn,
+        groupPanelLayerCount,
         layerListRef,
         getIcon,
+        truncateCompanyNameForLayerDisplay,
       };
     },
   };
@@ -63,10 +70,17 @@
           class="p-3"
         >
           <div class="d-flex align-items-center justify-content-between gap-2 pb-2">
-            <div class="my-title-xs-gray">{{ group.groupName }}</div>
+            <div class="my-title-xs-gray">
+              <template
+                v-if="group.groupName === '年份' || group.groupName === '事業統編'"
+              >
+                {{ group.groupName }}（{{ groupPanelLayerCount(group) }}）
+              </template>
+              <template v-else>{{ group.groupName }}</template>
+            </div>
             <div
               v-if="
-                group.groupName === '年份' &&
+                (group.groupName === '年份' || group.groupName === '事業統編') &&
                 group.groupLayers?.some((l) => l.showInLayerPanel !== false)
               "
               class="d-flex align-items-center justify-content-center flex-shrink-0"
@@ -111,7 +125,7 @@
                   <!-- 圖層名稱 -->
                   <div class="d-flex align-items-center text-start w-100 px-3 py-2">
                     <span class="my-content-sm-black">
-                      {{ layer.layerName }}
+                      {{ truncateCompanyNameForLayerDisplay(layer.layerName) }}
                       <span class="my-content-xs-gray ms-2">
                         {{ layer.summaryData?.totalCount }}
                       </span>

@@ -562,14 +562,15 @@
                 );
               }
             } else {
-              const detailHtml =
-                dataLayerConfig.isCarbonReportYearLayer === true
-                  ? buildCarbonReportMapPanelHtml(feature.properties, layerName)
-                  : buildAllPropertiesPopupHtml(feature.properties, layerName);
-              const tooltipHtml =
-                dataLayerConfig.isCarbonReportYearLayer === true
-                  ? buildCarbonReportHoverTooltipHtml(feature.properties)
-                  : detailHtml;
+              const useCarbonReportPanel =
+                dataLayerConfig.isCarbonReportYearLayer === true ||
+                dataLayerConfig.isCarbonReportBizLayer === true;
+              const detailHtml = useCarbonReportPanel
+                ? buildCarbonReportMapPanelHtml(feature.properties, layerName)
+                : buildAllPropertiesPopupHtml(feature.properties, layerName);
+              const tooltipHtml = useCarbonReportPanel
+                ? buildCarbonReportHoverTooltipHtml(feature.properties)
+                : detailHtml;
               leafletLayer.bindPopup(detailHtml);
               leafletLayer.bindTooltip(tooltipHtml, {
                 className: 'my-leaflet-tooltip',

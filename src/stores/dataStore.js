@@ -5,6 +5,7 @@ import { schemeCategory10 } from 'd3';
 import {
   fetchReportCarbonRowsGroupedByYear,
   buildCarbonReportPayloadFromRows,
+  truncateCompanyNameForLayerDisplay,
 } from '../utils/dataProcessor.js';
 
 const REPORT_CSV_FILE = 'report_with_google_location.csv';
@@ -19,7 +20,7 @@ export const useDataStore = defineStore(
     const layers = ref([
       {
         groupName: '年份',
-        /** 內部圖層（分析／路徑）不顯示在圖層列表；年度圖層由 initReportYearLayers 附加 */
+        /** 內部圖層（分析／路徑）不顯示在圖層列表；年度圖層由 initReportYearLayers 附加；「事業統編」群組見另一頂層 group */
         groupLayers: [
           {
             layerId: 'analysis-layer',
@@ -209,6 +210,11 @@ export const useDataStore = defineStore(
           },
         ],
       },
+      {
+        groupName: '事業統編',
+        /** 各統編圖層由 initReportYearLayers 依同一 CSV 預載填入 */
+        groupLayers: [],
+      },
     ]);
 
     // 在新的分組結構中搜尋指定 ID 的圖層
@@ -244,67 +250,146 @@ export const useDataStore = defineStore(
       return Promise.resolve(payload);
     };
 
+    /** 與年份相同：依事業統編預載，開關圖層不讀檔 */
+    let carbonReportBizPayloadByBizId = Object.create(null);
+
+    const loadCarbonReportBizFromPrecache = (layer) => {
+      const id = layer.filterBizId != null ? String(layer.filterBizId).trim() : '';
+      const payload = carbonReportBizPayloadByBizId[id];
+      if (!payload) {
+        return Promise.reject(new Error(`無預載事業統編資料: ${id || '(未指定)'}`));
+      }
+      return Promise.resolve(payload);
+    };
+
+    const carbonReportBizLayerName = (meta, bizId, rowsForBiz) => {
+      const ni = meta?.headerIndex?.['事業名稱'];
+      if (ni === undefined || !rowsForBiz?.length) {
+        return String(bizId);
+      }
+      const raw = String(rowsForBiz[0][ni] ?? '').trim();
+      const nm = truncateCompanyNameForLayerDisplay(raw);
+      return nm ? `${bizId}｜${nm}` : String(bizId);
+    };
+
     /**
-     * 讀取碳排 CSV 一次，依「年度」分組並預建各年 geoJson／表格／摘要；每個年度一個事業點圖層，開關時僅套用預載資料。
+     * 讀取碳排 CSV 一次，依「年度」與「事業統編」分組並預建 geoJson／表格／摘要；開關圖層僅套用預載資料。
      */
     const initReportYearLayers = async () => {
+      const infra = layers.value.find((g) => g.groupName === '年份');
+      const bizGroup = layers.value.find((g) => g.groupName === '事業統編');
+      if (!infra) return;
+
+      const preserved = (infra.groupLayers || []).filter(
+        (l) =>
+          !l.isCarbonReportYearLayer && !String(l.layerId || '').startsWith('report-year')
+      );
+
+      carbonReportYearPayloadByYear = Object.create(null);
+      carbonReportBizPayloadByBizId = Object.create(null);
+
       try {
         const grouped = await fetchReportCarbonRowsGroupedByYear(REPORT_CSV_FILE);
-        const { years, rowsByYear, meta } = grouped;
-        const infra = layers.value.find((g) => g.groupName === '年份');
-        if (!infra) return;
+        const { years, rowsByYear, bizIds, rowsByBizId, meta } = grouped;
 
-        const preserved = (infra.groupLayers || []).filter(
-          (l) =>
-            !l.isCarbonReportYearLayer && !String(l.layerId || '').startsWith('report-year')
-        );
-
-        carbonReportYearPayloadByYear = Object.create(null);
-
-        if (!meta || years.length === 0) {
-          console.warn('碳排 CSV 中未解析到任何年度');
+        if (!meta) {
+          console.warn('碳排 CSV 無法解析（無表頭或無資料列）');
           infra.groupLayers = preserved;
+          if (bizGroup) bizGroup.groupLayers = [];
           primaryCarbonReportLayerId.value = null;
           return;
         }
+
         const palette = schemeCategory10;
-        const yearLayers = years.map((year, i) => {
-          const layerStub = {
-            layerId: `report-year-${year}`,
-            layerName: `${year}年`,
-            filterYear: year,
-            layerColor: palette[i % palette.length],
-          };
-          carbonReportYearPayloadByYear[year] = buildCarbonReportPayloadFromRows(
-            layerStub,
-            meta,
-            rowsByYear[year] ?? []
-          );
-          return {
-            layerId: layerStub.layerId,
-            layerName: layerStub.layerName,
-            filterYear: year,
-            visible: false,
-            isLoading: false,
-            isLoaded: false,
-            type: 'point',
-            shape: 'circle',
-            layerColor: layerStub.layerColor,
-            geoJsonData: null,
-            summaryData: null,
-            tableData: null,
-            legendData: null,
-            loader: loadCarbonReportYearFromPrecache,
-            fileName: REPORT_CSV_FILE,
-            fieldName: null,
-            isCarbonReportYearLayer: true,
-          };
-        });
-        infra.groupLayers = [...preserved, ...yearLayers];
-        primaryCarbonReportLayerId.value = `report-year-${years[0]}`;
+
+        if (years.length === 0) {
+          console.warn('碳排 CSV 中未解析到任何年度（緯經度有效且「年度」非空）');
+          infra.groupLayers = preserved;
+          primaryCarbonReportLayerId.value = null;
+        } else {
+          const yearLayers = years.map((year, i) => {
+            const layerStub = {
+              layerId: `report-year-${year}`,
+              layerName: `${year}年`,
+              filterYear: year,
+              layerColor: palette[i % palette.length],
+            };
+            carbonReportYearPayloadByYear[year] = buildCarbonReportPayloadFromRows(
+              layerStub,
+              meta,
+              rowsByYear[year] ?? []
+            );
+            return {
+              layerId: layerStub.layerId,
+              layerName: layerStub.layerName,
+              filterYear: year,
+              visible: false,
+              isLoading: false,
+              isLoaded: false,
+              type: 'point',
+              shape: 'circle',
+              layerColor: layerStub.layerColor,
+              geoJsonData: null,
+              summaryData: null,
+              tableData: null,
+              legendData: null,
+              loader: loadCarbonReportYearFromPrecache,
+              fileName: REPORT_CSV_FILE,
+              fieldName: null,
+              isCarbonReportYearLayer: true,
+            };
+          });
+          infra.groupLayers = [...preserved, ...yearLayers];
+          primaryCarbonReportLayerId.value = `report-year-${years[0]}`;
+        }
+
+        if (bizGroup) {
+          if (bizIds.length === 0) {
+            console.warn('碳排 CSV 中未解析到任何事業統編（緯經度有效且「事業統編」非空）');
+            bizGroup.groupLayers = [];
+          } else {
+            const bizLayers = bizIds.map((bizId, i) => {
+              const rows = rowsByBizId[bizId] ?? [];
+              const layerStub = {
+                layerId: `report-biz-${bizId}`,
+                layerName: carbonReportBizLayerName(meta, bizId, rows),
+                filterBizId: bizId,
+                layerColor: palette[i % palette.length],
+              };
+              carbonReportBizPayloadByBizId[bizId] = buildCarbonReportPayloadFromRows(
+                layerStub,
+                meta,
+                rows
+              );
+              return {
+                layerId: layerStub.layerId,
+                layerName: layerStub.layerName,
+                filterBizId: bizId,
+                visible: false,
+                isLoading: false,
+                isLoaded: false,
+                type: 'point',
+                shape: 'circle',
+                layerColor: layerStub.layerColor,
+                geoJsonData: null,
+                summaryData: null,
+                tableData: null,
+                legendData: null,
+                loader: loadCarbonReportBizFromPrecache,
+                fileName: REPORT_CSV_FILE,
+                fieldName: null,
+                isCarbonReportBizLayer: true,
+              };
+            });
+            bizGroup.groupLayers = bizLayers;
+          }
+        }
       } catch (e) {
-        console.error('初始化年度事業圖層失敗:', e);
+        console.error('初始化年度／事業統編圖層失敗:', e);
         carbonReportYearPayloadByYear = Object.create(null);
+        carbonReportBizPayloadByBizId = Object.create(null);
+        infra.groupLayers = preserved;
+        if (bizGroup) bizGroup.groupLayers = [];
         primaryCarbonReportLayerId.value = null;
       }
     };
@@ -357,7 +442,7 @@ export const useDataStore = defineStore(
     };
 
     /**
-     * 「年份」分組：一鍵全部開啟或全部關閉（若目前已全開則關閉，否則開啟並載入未載入圖層）
+     * 指定分組（如「年份」「事業統編」）：一鍵全部開啟或全部關閉（若目前已全開則關閉，否則開啟並載入未載入圖層）
      */
     const toggleAllLayersInGroup = async (groupName) => {
       const group = layers.value.find((g) => g.groupName === groupName);

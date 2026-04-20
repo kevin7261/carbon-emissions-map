@@ -1,7 +1,10 @@
 <script setup>
   import { ref, computed, defineEmits, onMounted, watch } from 'vue';
   import { useDataStore } from '@/stores/dataStore.js';
-  import { formatCarbonReportFieldLabel } from '@/utils/dataProcessor.js';
+  import {
+    formatCarbonReportFieldLabel,
+    truncateCompanyNameForLayerDisplay,
+  } from '@/utils/dataProcessor.js';
 
   const emit = defineEmits(['highlight-on-map']);
 
@@ -238,7 +241,7 @@
             @click="setActiveLayerTab(layer.layerId)"
           >
             <span class="my-title-sm-black"
-              >{{ layer.layerName }}
+              >{{ truncateCompanyNameForLayerDisplay(layer.layerName) }}
               <span class="my-content-xs-gray ms-2" v-if="getLayerDataCount(layer)">
                 {{ getLayerDataCount(layer) }}
               </span>
