@@ -31,34 +31,36 @@
         dataStore.toggleLayerVisibility(layerId);
       };
 
-      /** 事業統編群組：依輸入篩選圖層（子字串 match）；空白則顯示全部 */
-      const bizIdFilter = ref('');
+      /** 「事業」群組：依輸入篩選（事業統編或圖層名稱／事業名稱子字串）；空白則顯示全部 */
+      const businessLayerSearch = ref('');
 
-      const layerMatchesBizIdFilter = (layer) => {
-        const q = bizIdFilter.value.trim();
+      const layerMatchesBusinessGroupFilter = (layer) => {
+        const q = businessLayerSearch.value.trim();
         if (!q) return true;
         const id = layer.filterBizId != null ? String(layer.filterBizId) : '';
-        return id.includes(q);
+        if (id.includes(q)) return true;
+        const nm = layer.layerName != null ? String(layer.layerName) : '';
+        return nm.includes(q);
       };
 
       const panelLayersForGroup = (group) => {
         const base = (group.groupLayers || []).filter((l) => l.showInLayerPanel !== false);
-        if (group.groupName !== '事業統編') return base;
-        return base.filter(layerMatchesBizIdFilter);
+        if (group.groupName !== '事業') return base;
+        return base.filter(layerMatchesBusinessGroupFilter);
       };
 
       const toggleAllInGroup = (groupName) => {
-        if (groupName === '事業統編') {
-          const q = bizIdFilter.value.trim();
+        if (groupName === '事業') {
+          const q = businessLayerSearch.value.trim();
           const layerPredicate =
-            q === '' ? undefined : (l) => layerMatchesBizIdFilter(l);
+            q === '' ? undefined : (l) => layerMatchesBusinessGroupFilter(l);
           dataStore.toggleAllLayersInGroup(groupName, { layerPredicate });
           return;
         }
         dataStore.toggleAllLayersInGroup(groupName);
       };
 
-      /** 圖層面板目前列出的圖層數（事業統編群組會依篩選變動） */
+      /** 圖層面板目前列出的圖層數（「事業」群組會依篩選變動） */
       const groupPanelLayerCount = (group) => panelLayersForGroup(group).length;
 
       const groupAllLayersOn = (group) => {
@@ -74,7 +76,7 @@
         groupAllLayersOn,
         groupPanelLayerCount,
         panelLayersForGroup,
-        bizIdFilter,
+        businessLayerSearch,
         layerListRef,
         getIcon,
         truncateCompanyNameForLayerDisplay,
@@ -96,7 +98,7 @@
           <div class="d-flex align-items-center justify-content-between gap-2 pb-2">
             <div class="my-title-xs-gray">
               <template
-                v-if="group.groupName === '年份' || group.groupName === '事業統編'"
+                v-if="group.groupName === '年份' || group.groupName === '事業'"
               >
                 {{ group.groupName }}（{{ groupPanelLayerCount(group) }}）
               </template>
@@ -104,7 +106,7 @@
             </div>
             <div
               v-if="
-                (group.groupName === '年份' || group.groupName === '事業統編') &&
+                (group.groupName === '年份' || group.groupName === '事業') &&
                 panelLayersForGroup(group).length > 0
               "
               class="d-flex align-items-center justify-content-center flex-shrink-0"
@@ -121,12 +123,12 @@
             </div>
           </div>
 
-          <div v-if="group.groupName === '事業統編'" class="pb-2">
+          <div v-if="group.groupName === '事業'" class="pb-2">
             <input
-              v-model="bizIdFilter"
+              v-model="businessLayerSearch"
               type="text"
               class="form-control form-control-sm"
-              placeholder="篩選事業統編…"
+              placeholder="篩選統編或事業名稱…"
               autocomplete="off"
               @click.stop
             />

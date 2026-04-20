@@ -20,7 +20,7 @@ export const useDataStore = defineStore(
     const layers = ref([
       {
         groupName: '年份',
-        /** 內部圖層（分析／路徑）不顯示在圖層列表；年度圖層由 initReportYearLayers 附加；「事業統編」群組見另一頂層 group */
+        /** 內部圖層（分析／路徑）不顯示在圖層列表；年度圖層由 initReportYearLayers 附加；「事業」群組見另一頂層 group */
         groupLayers: [
           {
             layerId: 'analysis-layer',
@@ -211,7 +211,7 @@ export const useDataStore = defineStore(
         ],
       },
       {
-        groupName: '事業統編',
+        groupName: '事業',
         /** 各統編圖層由 initReportYearLayers 依同一 CSV 預載填入 */
         groupLayers: [],
       },
@@ -273,11 +273,11 @@ export const useDataStore = defineStore(
     };
 
     /**
-     * 讀取碳排 CSV 一次，依「年度」與「事業統編」分組並預建 geoJson／表格／摘要；開關圖層僅套用預載資料。
+     * 讀取碳排 CSV 一次，依「年度」與 CSV「事業統編」欄分組並預建 geoJson／表格／摘要；開關圖層僅套用預載資料。
      */
     const initReportYearLayers = async () => {
       const infra = layers.value.find((g) => g.groupName === '年份');
-      const bizGroup = layers.value.find((g) => g.groupName === '事業統編');
+      const bizGroup = layers.value.find((g) => g.groupName === '事業');
       if (!infra) return;
 
       const preserved = (infra.groupLayers || []).filter(
@@ -385,7 +385,7 @@ export const useDataStore = defineStore(
           }
         }
       } catch (e) {
-        console.error('初始化年度／事業統編圖層失敗:', e);
+        console.error('初始化年度／事業圖層失敗:', e);
         carbonReportYearPayloadByYear = Object.create(null);
         carbonReportBizPayloadByBizId = Object.create(null);
         infra.groupLayers = preserved;
@@ -442,7 +442,7 @@ export const useDataStore = defineStore(
     };
 
     /**
-     * 指定分組（如「年份」「事業統編」）：一鍵全部開啟或全部關閉（若目前已全開則關閉，否則開啟並載入未載入圖層）
+     * 指定分組（如「年份」「事業」）：一鍵全部開啟或全部關閉（若目前已全開則關閉，否則開啟並載入未載入圖層）
      */
     /**
      * @param {string} groupName

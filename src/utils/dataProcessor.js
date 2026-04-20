@@ -2134,7 +2134,7 @@ export function buildCarbonReportPayloadFromRows(layer, meta, rows) {
 /**
  * 碳排報告（含 Google 緯經度）— public/data/csv/report_with_google_location.csv
  * 若 layer.filterYear 有值，只載入該年度資料（不同年度各自為一圖層）。
- * 仍會每次請求 CSV；年度／事業統編圖層請改以 store 預載＋ {@link buildCarbonReportPayloadFromRows}，避免重複 fetch。
+ * 仍會每次請求 CSV；年度／「事業」圖層請改以 store 預載＋ {@link buildCarbonReportPayloadFromRows}，避免重複 fetch。
  */
 export async function loadReportWithGoogleLocationData(layer) {
   try {
