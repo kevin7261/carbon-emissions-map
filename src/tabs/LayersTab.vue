@@ -52,8 +52,7 @@
       const toggleAllInGroup = (groupName) => {
         if (groupName === '事業') {
           const q = businessLayerSearch.value.trim();
-          const layerPredicate =
-            q === '' ? undefined : (l) => layerMatchesBusinessGroupFilter(l);
+          const layerPredicate = q === '' ? undefined : (l) => layerMatchesBusinessGroupFilter(l);
           dataStore.toggleAllLayersInGroup(groupName, { layerPredicate });
           return;
         }
@@ -102,9 +101,7 @@
         >
           <div class="d-flex align-items-center justify-content-between gap-2 pb-2">
             <div class="my-title-xs-gray">
-              <template
-                v-if="group.groupName === '年份' || group.groupName === '事業'"
-              >
+              <template v-if="group.groupName === '年份' || group.groupName === '事業'">
                 {{ group.groupName }}（{{ groupPanelLayerCount(group) }}）
               </template>
               <template v-else>{{ group.groupName }}</template>
@@ -150,11 +147,7 @@
             </div>
           </div>
 
-          <div
-            v-for="layer in panelLayersForGroup(group)"
-            :key="layer.layerId"
-            class="mb-1"
-          >
+          <div v-for="layer in panelLayersForGroup(group)" :key="layer.layerId" class="mb-1">
             <!-- 圖層卡片 -->
             <div
               class="btn rounded-0 border-0 d-flex shadow-sm my-bgcolor-white-hover p-0"
