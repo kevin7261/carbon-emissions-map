@@ -68,6 +68,10 @@
         return panel.length > 0 && panel.every((l) => l.visible);
       };
 
+      const clearBusinessLayerSearch = () => {
+        businessLayerSearch.value = '';
+      };
+
       // 📤 將需要暴露給 <template> 使用的數據和方法返回
       return {
         layers,
@@ -77,6 +81,7 @@
         groupPanelLayerCount,
         panelLayersForGroup,
         businessLayerSearch,
+        clearBusinessLayerSearch,
         layerListRef,
         getIcon,
         truncateCompanyNameForLayerDisplay,
@@ -124,14 +129,25 @@
           </div>
 
           <div v-if="group.groupName === '事業'" class="pb-2">
-            <input
-              v-model="businessLayerSearch"
-              type="text"
-              class="form-control form-control-sm"
-              placeholder="篩選統編或事業名稱…"
-              autocomplete="off"
-              @click.stop
-            />
+            <div class="d-flex gap-1 align-items-stretch">
+              <input
+                v-model="businessLayerSearch"
+                type="text"
+                class="form-control form-control-sm flex-grow-1"
+                placeholder="篩選統編或事業名稱…"
+                autocomplete="off"
+                @click.stop
+              />
+              <button
+                type="button"
+                class="btn btn-outline-secondary btn-sm text-nowrap flex-shrink-0"
+                title="清空篩選"
+                :disabled="!businessLayerSearch.trim()"
+                @click.stop="clearBusinessLayerSearch"
+              >
+                清空
+              </button>
+            </div>
           </div>
 
           <div
