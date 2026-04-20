@@ -31,8 +31,8 @@
     selectedFilter: { type: String, default: '' },
 
     // 🔧 其他設定 (Other Settings)
-    zoomLevel: { type: Number, default: 11 },
-    currentCoords: { type: Object, default: () => ({ lat: 25.033, lng: 121.5654 }) },
+    zoomLevel: { type: Number, default: 6 },
+    currentCoords: { type: Object, default: () => ({ lat: 23.7, lng: 119.9 }) },
     activeMarkers: { type: Number, default: 0 },
     isSidePanelDragging: { type: Boolean, default: false },
   });

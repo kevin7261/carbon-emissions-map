@@ -269,7 +269,7 @@
       >
         <div class="h-100 d-flex flex-column">
           <div class="flex-grow-1 overflow-auto">
-            <table class="table w-100 mb-0">
+            <table class="table mb-0 my-datatable-content-width">
               <thead class="sticky-top my-table-thead">
                 <tr class="text-center text-nowrap">
                   <template v-for="column in getLayerColumns(layer)" :key="column">
@@ -298,8 +298,7 @@
                   <template v-for="column in getLayerColumns(layer)" :key="column">
                     <td
                       v-if="column !== 'color'"
-                      class="border-0 text-nowrap text-truncate p-0"
-                      style="max-width: 80px"
+                      class="border-0 text-nowrap p-0 align-middle"
                     >
                       <div v-if="column === '#'" class="d-flex p-0">
                         <div
@@ -337,5 +336,21 @@
 <style scoped>
   .my-table-thead {
     border-bottom: 2px solid var(--my-color-gray-300) !important;
+  }
+
+  /**
+   * 欄寬依「該欄所有儲存格＋表頭」中最寬者決定（table-layout: auto），
+   * 不以固定像素或僅表頭縮窄；內容較寬時由外層 overflow-auto 橫向捲動。
+   */
+  .my-datatable-content-width {
+    table-layout: auto;
+    width: max-content;
+    min-width: 100%;
+  }
+
+  .my-datatable-content-width th,
+  .my-datatable-content-width td {
+    width: auto;
+    max-width: none;
   }
 </style>

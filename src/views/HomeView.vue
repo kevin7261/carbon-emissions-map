@@ -127,9 +127,9 @@
       /** 🔍 選定的資料篩選器 */
       const selectedFilter = ref(null);
       /** 🔍 地圖縮放等級 */
-      const zoomLevel = ref(11);
-      /** 📍 當前地圖座標 */
-      const currentCoords = ref({ lat: 25.033, lng: 121.5654 });
+      const zoomLevel = ref(6);
+      /** 📍 當前地圖座標（預設：台澎金馬概略中心） */
+      const currentCoords = ref({ lat: 23.7, lng: 119.9 });
       /** 📍 作用中的地圖標記數量 */
       const activeMarkers = ref(0);
 

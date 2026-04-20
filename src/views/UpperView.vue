@@ -27,7 +27,7 @@
       contentHeight: { type: Number, default: 500 },
       showTainanLayer: { type: Boolean, default: false },
       selectedFilter: { type: String, default: '' },
-      zoomLevel: { type: Number, default: 11 },
+      zoomLevel: { type: Number, default: 6 },
       isPanelDragging: { type: Boolean, default: false },
       activeMarkers: { type: Number, default: 0 },
     },

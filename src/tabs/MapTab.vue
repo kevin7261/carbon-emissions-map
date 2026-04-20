@@ -25,7 +25,7 @@
 
     // 🔧 組件屬性定義 (Component Props Definition)
     props: {
-      zoomLevel: { type: Number, default: 11 }, // 地圖縮放等級，預設為 11
+      zoomLevel: { type: Number, default: 6 }, // 與全國預設視角一致（實際初始視角來自 defineStore.mapView）
       isPanelDragging: { type: Boolean, default: false }, // 面板是否正在拖曳，預設為 false
     },
 
@@ -955,22 +955,22 @@
         }
       };
 
-      // 🌍 顯示全市函數 (Show Full City Function) - 回到預設地圖範圍
-      const showFullCity = () => {
-        // 檢查地圖實例和準備狀態
+      // 🌍 顯示全國：台灣本島、澎湖、金門、馬祖（台澎金馬）一覽
+      const showFullNation = () => {
         if (!mapInstance || !isMapReady.value) return;
 
-        // 使用固定的台北市預設範圍，不依賴當前存儲的值
-        const defaultCenter = [25.051474, 121.557989]; // 台北市中心
-        const defaultZoom = 11; // 適合台北市的縮放等級
+        const bounds = L.latLngBounds(
+          [21.85, 118.1], // 西南：含金門以西緩衝、台灣南端
+          [26.52, 122.08] // 東北：含馬祖以北緩衝、台灣東側
+        );
+        mapInstance.fitBounds(bounds, { padding: [40, 40] });
 
-        console.log(`🌍 顯示全市: 中心點 ${defaultCenter}, 縮放等級 ${defaultZoom}`);
+        const center = mapInstance.getCenter();
+        defineStore.setMapView([center.lat, center.lng], mapInstance.getZoom());
 
-        // 回到預設的地圖中心和縮放等級
-        mapInstance.setView(defaultCenter, defaultZoom);
-
-        // 同時更新 defineStore 中的值，保持一致性
-        defineStore.setMapView(defaultCenter, defaultZoom);
+        console.log(
+          `🌍 顯示全國 (台澎金馬): 中心 [${center.lat.toFixed(4)}, ${center.lng.toFixed(4)}], zoom ${mapInstance.getZoom()}`
+        );
       };
 
       // 🎯 高亮顯示特定要素函數 (Highlight Specific Feature Function)
@@ -1414,7 +1414,7 @@
         changeBasemap, // 切換底圖函數
         getBasemapLabel, // 獲取底圖標籤函數
         showAllFeatures, // 顯示全部要素函數
-        showFullCity, // 顯示全市函數
+        showFullNation, // 顯示全國（台澎金馬）視角
         isAnyLayerVisible, // 檢查是否有可見圖層的計算屬性
         highlightFeature, // 高亮顯示特定要素函數
         invalidateSize, // 刷新地圖尺寸函數
@@ -1505,13 +1505,13 @@
         顯示全部
       </button>
 
-      <!-- 顯示全市 -->
+      <!-- 顯示全國（台澎金馬） -->
       <button
         class="btn rounded-pill border-0 my-btn-transparent my-font-size-xs text-nowrap my-cursor-pointer"
-        @click="showFullCity"
-        title="回到預設地圖範圍"
+        @click="showFullNation"
+        title="縮放至台灣、澎湖、金門、馬祖可見範圍"
       >
-        顯示全市
+        顯示全國
       </button>
     </div>
   </div>
