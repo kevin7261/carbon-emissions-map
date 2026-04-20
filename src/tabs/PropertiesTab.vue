@@ -668,9 +668,9 @@
                   }}</span>
                   <span class="my-content-sm-black">
                     {{ point.name }}
-                    <small class="my-content-xs-gray ms-2">
+                    <span class="my-content-xs-gray ms-2">
                       ({{ point.coordinates[1].toFixed(6) }}, {{ point.coordinates[0].toFixed(6) }})
-                    </small>
+                    </span>
                   </span>
                 </div>
               </div>

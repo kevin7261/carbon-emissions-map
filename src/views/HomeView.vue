@@ -820,11 +820,11 @@
     <!-- 固定高度 footer，提供版權資訊和技術鳴謝 -->
     <!-- 只在 xl breakpoint 以上顯示 -->
     <footer
-      class="d-none d-xl-flex justify-content-between my-app-footer my-title-sm-white my-bgcolor-gray-800 p-2"
+      class="d-none d-xl-flex justify-content-between my-app-footer my-title-xs-white my-bgcolor-gray-800 p-2"
       ref="appFooterRef"
     >
-      <small>臺灣大學地理環境資源學系</small>
-      <small>2025</small>
+      <span>臺灣大學地理環境資源學系</span>
+      <span>2025</span>
     </footer>
   </div>
 </template>

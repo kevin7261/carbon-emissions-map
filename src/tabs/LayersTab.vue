@@ -133,14 +133,14 @@
               <input
                 v-model="businessLayerSearch"
                 type="text"
-                class="form-control form-control-sm flex-grow-1"
+                class="form-control my-form-control-slim flex-grow-1"
                 placeholder="篩選統編或事業名稱…"
                 autocomplete="off"
                 @click.stop
               />
               <button
                 type="button"
-                class="btn btn-sm my-btn-outline-gray text-nowrap flex-shrink-0"
+                class="btn my-btn-outline-gray my-btn-slim text-nowrap flex-shrink-0"
                 title="清空篩選"
                 :disabled="!businessLayerSearch.trim()"
                 @click.stop="clearBusinessLayerSearch"

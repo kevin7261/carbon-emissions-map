@@ -78,7 +78,7 @@
             :aria-valuenow="progress"
             aria-valuemin="0"
             aria-valuemax="100"
-            style="transition: width 0.3s ease; font-size: 0.75rem; color: var(--my-color-white)"
+            style="transition: width 0.3s ease; font-size: var(--my-font-size-xs); color: var(--my-color-white)"
           >
             {{ Math.round(progress) }}%
           </div>
@@ -88,7 +88,7 @@
       <!-- 📝 輔助說明文字 (Secondary Text) -->
       <!-- 提供載入操作的詳細說明或提示資訊 -->
       <div v-if="subText" class="mt-2">
-        <small class="my-content-xs-gray">{{ subText }}</small>
+        <span class="my-content-xs-gray">{{ subText }}</span>
       </div>
     </div>
   </div>

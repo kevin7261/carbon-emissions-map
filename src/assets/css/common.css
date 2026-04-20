@@ -436,16 +436,19 @@ body {
 
 /* 與 Bootstrap 元件併用時的顏色（僅使用 variables.css 變數） */
 .my-badge-blue {
+  font-size: var(--my-font-size-xs);
   color: var(--my-color-white);
   background-color: var(--my-color-blue);
 }
 
 .my-badge-green {
+  font-size: var(--my-font-size-xs);
   color: var(--my-color-white);
   background-color: var(--my-color-green);
 }
 
 .my-badge-neutral {
+  font-size: var(--my-font-size-xs);
   color: var(--my-color-white);
   background-color: var(--my-color-bluegrey);
 }
@@ -471,6 +474,20 @@ body {
   color: var(--my-color-gray-400);
   border-color: var(--my-color-gray-300);
   background-color: transparent;
+}
+
+/* 與 Bootstrap 表單/按鈕併用：字級與內距（variables.css）— 取代 form-control-sm、btn-sm */
+.my-form-control-slim {
+  font-size: var(--my-font-size-sm);
+  line-height: 1.5;
+  padding: 0.25rem 0.5rem;
+  min-height: calc(1.5em + 0.5rem + 2px);
+}
+
+.my-btn-slim {
+  font-size: var(--my-font-size-sm);
+  line-height: 1.5;
+  padding: 0.25rem 0.5rem;
 }
 
 /* 面板樣式  */
