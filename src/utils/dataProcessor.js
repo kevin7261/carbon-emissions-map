@@ -2004,13 +2004,24 @@ export function formatCarbonReportFieldLabel(key) {
   return key.replace(/\(公噸CO2e\)/g, '').trimEnd();
 }
 
-/** 圖層名稱用：若有「股份有限公司」，只保留其前方文字（不含該六字與之後內容）；無則原樣回傳。 */
+/** 圖層名稱用：遇「股份有限公司」或「（股）公司」則截斷為其前方文字（不含該字樣與之後）；可重複套用至無上述字樣。 */
 export function truncateCompanyNameForLayerDisplay(name) {
   if (typeof name !== 'string' || !name) return name;
-  const marker = '股份有限公司';
-  const i = name.indexOf(marker);
-  if (i < 0) return name;
-  return name.slice(0, i).trimEnd();
+  const markers = ['股份有限公司', '（股）公司', '(股)公司'];
+  let s = name;
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const marker of markers) {
+      const i = s.indexOf(marker);
+      if (i >= 0) {
+        s = s.slice(0, i).trimEnd();
+        changed = true;
+        break;
+      }
+    }
+  }
+  return s;
 }
 
 /**
@@ -2137,7 +2148,7 @@ export async function loadReportWithGoogleLocationData(layer) {
       throw new Error('report_with_google_location.csv 沒有資料列');
     }
     const rows =
-      filterYear != null ? grouped.rowsByYear[filterYear] ?? [] : grouped.orderedValidRows;
+      filterYear != null ? (grouped.rowsByYear[filterYear] ?? []) : grouped.orderedValidRows;
     return buildCarbonReportPayloadFromRows(layer, grouped.meta, rows);
   } catch (error) {
     console.error('❌ 數據載入失敗:', error);
