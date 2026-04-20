@@ -1,24 +1,11 @@
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
+import { schemeCategory10 } from 'd3';
 
 import {
   fetchReportCsvYears,
   loadReportWithGoogleLocationData,
 } from '../utils/dataProcessor.js';
-
-/** 事業碳排各年度圖層輪替顏色（與 CSS 變數 --my-color-* 對應） */
-const REPORT_YEAR_LAYER_COLORS = [
-  'lime',
-  'green',
-  'teal',
-  'cyan',
-  'lightblue',
-  'blue',
-  'indigo',
-  'purple',
-  'deeporange',
-  'amber',
-];
 
 const REPORT_CSV_FILE = 'report_with_google_location.csv';
 
@@ -31,7 +18,7 @@ export const useDataStore = defineStore(
 
     const layers = ref([
       {
-        groupName: '公司行號',
+        groupName: '年份',
         groupLayers: [],
       },
       {
@@ -252,7 +239,7 @@ export const useDataStore = defineStore(
     const initReportYearLayers = async () => {
       try {
         const years = await fetchReportCsvYears(REPORT_CSV_FILE);
-        const infra = layers.value.find((g) => g.groupName === '公司行號');
+        const infra = layers.value.find((g) => g.groupName === '年份');
         if (!infra) return;
         if (years.length === 0) {
           console.warn('碳排 CSV 中未解析到任何年度');
@@ -260,6 +247,7 @@ export const useDataStore = defineStore(
           primaryCarbonReportLayerId.value = null;
           return;
         }
+        const palette = schemeCategory10;
         infra.groupLayers = years.map((year, i) => ({
           layerId: `report-year-${year}`,
           layerName: `${year}年`,
@@ -269,7 +257,7 @@ export const useDataStore = defineStore(
           isLoaded: false,
           type: 'point',
           shape: 'circle',
-          colorName: REPORT_YEAR_LAYER_COLORS[i % REPORT_YEAR_LAYER_COLORS.length],
+          layerColor: palette[i % palette.length],
           geoJsonData: null,
           summaryData: null,
           tableData: null,
@@ -334,7 +322,7 @@ export const useDataStore = defineStore(
     };
 
     /**
-     * 公司行號等分組：一鍵全部開啟或全部關閉（若目前已全開則關閉，否則開啟並載入未載入圖層）
+     * 「年份」分組：一鍵全部開啟或全部關閉（若目前已全開則關閉，否則開啟並載入未載入圖層）
      */
     const toggleAllLayersInGroup = async (groupName) => {
       const group = layers.value.find((g) => g.groupName === groupName);

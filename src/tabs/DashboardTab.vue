@@ -312,7 +312,15 @@
           >
             <span class="my-title-sm-black">{{ layer.layerName }}</span>
           </div>
-          <div class="w-100" :class="`my-bgcolor-${layer.colorName}`" style="min-height: 4px"></div>
+          <div
+            class="w-100"
+            :class="layer.layerColor ? undefined : `my-bgcolor-${layer.colorName}`"
+            :style="
+              layer.layerColor
+                ? { minHeight: '4px', backgroundColor: layer.layerColor }
+                : { minHeight: '4px' }
+            "
+          ></div>
         </li>
       </ul>
     </div>

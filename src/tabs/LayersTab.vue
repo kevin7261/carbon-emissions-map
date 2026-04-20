@@ -63,7 +63,7 @@
           <div class="d-flex align-items-center justify-content-between gap-2 pb-2">
             <div class="my-title-xs-gray">{{ group.groupName }}</div>
             <div
-              v-if="group.groupName === '公司行號' && group.groupLayers?.length"
+              v-if="group.groupName === '年份' && group.groupLayers?.length"
               class="d-flex align-items-center justify-content-center flex-shrink-0"
               :title="groupAllLayersOn(group) ? '關閉此分組所有圖層' : '開啟此分組所有圖層'"
             >
@@ -87,8 +87,12 @@
               <!-- 圖層圖示 -->
               <div
                 class="d-flex"
-                :class="`my-bgcolor-${layer.colorName}`"
-                style="min-width: 6px"
+                :class="layer.layerColor ? undefined : `my-bgcolor-${layer.colorName}`"
+                :style="
+                  layer.layerColor
+                    ? { minWidth: '6px', backgroundColor: layer.layerColor }
+                    : { minWidth: '6px' }
+                "
               ></div>
               <div class="w-100">
                 <div class="d-flex">

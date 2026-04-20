@@ -185,7 +185,7 @@
 
       /** 合併 propertyData 與其餘純量屬性，供 popup / tooltip 顯示完整欄位 */
       const buildAllPropertiesPopupHtml = (props, title) => {
-        const skip = new Set(['fillColor', 'popupData', 'tableData']);
+        const skip = new Set(['fillColor', 'popupData', 'tableData', 'popupOnlyPropertyData']);
         const entries = [];
         const seen = new Set();
         if (props.propertyData && typeof props.propertyData === 'object') {
@@ -195,11 +195,13 @@
             seen.add(k);
           }
         }
-        for (const [k, v] of Object.entries(props)) {
-          if (skip.has(k) || k === 'propertyData') continue;
-          if (v !== null && typeof v === 'object') continue;
-          if (seen.has(k)) continue;
-          entries.push([k, v]);
+        if (!props.popupOnlyPropertyData) {
+          for (const [k, v] of Object.entries(props)) {
+            if (skip.has(k) || k === 'propertyData') continue;
+            if (v !== null && typeof v === 'object') continue;
+            if (seen.has(k)) continue;
+            entries.push([k, v]);
+          }
         }
         const rows = entries.map(
           ([k, v]) =>
@@ -208,7 +210,7 @@
         return `<div class="p-1" style="max-width: 320px; max-height: 400px; overflow: auto;"><div class="my-title-xs-gray pb-2">${escapeHtml(title)}</div>${rows.join('')}</div>`;
       };
 
-      /** 公司行號碳排點：hover 僅顯示事業名、地址、年份 */
+      /** 事業碳排年度圖層：hover 僅顯示事業名、地址、年份 */
       const buildCarbonReportTooltipHtml = (props) => {
         const pd = props.propertyData || {};
         const name = pd.事業名稱 ?? props.name ?? '';
@@ -235,7 +237,7 @@
         if (!dataLayerConfig.geoJsonData) return null;
 
         // 解構圖層屬性
-        const { layerName, colorName, type } = dataLayerConfig; // 獲取圖層名稱、顏色和類型
+        const { layerName, colorName, type, layerColor } = dataLayerConfig; // 圖層名稱、主題色名或 d3 色票 hex
 
         // 創建 GeoJSON 圖層
         const geoJsonLayer = L.geoJSON(dataLayerConfig.geoJsonData, {
@@ -365,12 +367,16 @@
                 return marker;
               }
             } else if (type === 'point') {
-              // 一般點類型
+              // 一般點類型（年度碳排等可用 layerColor = d3.schemeCategory10 hex）
+              const pointFill =
+                layerColor && String(layerColor).trim() !== ''
+                  ? String(layerColor).trim()
+                  : `var(--my-color-${colorName || 'blue'})`;
               const icon = L.divIcon({
                 html: `<div
                 class="rounded-circle"
                 style="
-                   background-color: var(--my-color-${colorName});
+                   background-color: ${pointFill};
                    width: 8px;
                    height: 8px;
                    box-shadow: 0 2px 6px rgba(0,0,0,0.3);

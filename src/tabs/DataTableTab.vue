@@ -134,6 +134,12 @@
     return sortState.order === 'asc' ? 'fas fa-sort-up' : 'fas fa-sort-down';
   };
 
+  /** 表頭顯示用：略去單位後綴，欄位 key 與排序仍用原名 */
+  const formatDataTableColumnLabel = (key) => {
+    if (typeof key !== 'string') return key;
+    return key.replace(/\(公噸CO2e\)/g, '').trimEnd();
+  };
+
   /**
    * 🎯 處理地圖高亮顯示 (Handle Map Highlighting)
    * @param {Object} item - 要高亮的項目
@@ -240,7 +246,15 @@
               </span>
             </span>
           </div>
-          <div class="w-100" :class="`my-bgcolor-${layer.colorName}`" style="min-height: 4px"></div>
+          <div
+            class="w-100"
+            :class="layer.layerColor ? undefined : `my-bgcolor-${layer.colorName}`"
+            :style="
+              layer.layerColor
+                ? { minHeight: '4px', backgroundColor: layer.layerColor }
+                : { minHeight: '4px' }
+            "
+          ></div>
         </li>
       </ul>
     </div>
@@ -265,7 +279,7 @@
                       class="my-bgcolor-white-hover p-1 my-cursor-pointer"
                     >
                       <span class="my-title-xs-gray text-nowrap">
-                        {{ column }}
+                        {{ formatDataTableColumnLabel(column) }}
                       </span>
                       <span class="my-title-xs-gray text-nowrap ms-2">
                         <i :class="getSortIcon(layer.layerId, column)"></i>

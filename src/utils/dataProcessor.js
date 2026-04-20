@@ -1931,6 +1931,31 @@ export async function fetchReportCsvYears(fileName) {
   return Array.from(years).sort((a, b) => Number(b) - Number(a));
 }
 
+/** 事業碳排 CSV 屬性顯示順序（屬性分頁、地圖 popup 依此；DataTable 見下述排除清單） */
+const REPORT_WITH_GOOGLE_LOCATION_PROPERTY_ORDER = [
+  '年度',
+  '管制編號',
+  '事業名稱',
+  '事業統編',
+  '直接排放量(公噸CO2e)',
+  '能源間接排放量(公噸CO2e)',
+  '合計排放量(公噸CO2e)',
+  '縣市別',
+  '行業分類',
+  '地址',
+  '緯度',
+  '經度',
+];
+
+/** DataTable 不顯示（年度／統編／座標／地址等由圖層或屬性分頁呈現） */
+const REPORT_WITH_GOOGLE_LOCATION_TABLE_SKIP = new Set([
+  '年度',
+  '緯度',
+  '經度',
+  '地址',
+  '事業統編',
+]);
+
 /**
  * 碳排報告（含 Google 緯經度）— public/data/csv/report_with_google_location.csv
  * 若 layer.filterYear 有值，只載入該年度資料（不同年度各自為一圖層）。
@@ -1939,6 +1964,10 @@ export async function loadReportWithGoogleLocationData(layer) {
   try {
     const layerId = layer.layerId;
     const colorName = layer.colorName;
+    const layerColorHex =
+      layer.layerColor != null && String(layer.layerColor).trim() !== ''
+        ? String(layer.layerColor).trim()
+        : null;
     const filterYear =
       layer.filterYear != null && String(layer.filterYear).trim() !== ''
         ? String(layer.filterYear).trim()
@@ -1963,33 +1992,18 @@ export async function loadReportWithGoogleLocationData(layer) {
     }
 
     const headers = parseCsvLine(lines[0]).map((h) => h.trim());
-    const col = {
-      年度: headers.indexOf('年度'),
-      管制編號: headers.indexOf('管制編號'),
-      事業名稱: headers.indexOf('事業名稱'),
-      事業統編: headers.indexOf('事業統編'),
-      直接排放量: headers.indexOf('直接排放量(公噸CO2e)'),
-      能源間接排放量: headers.indexOf('能源間接排放量(公噸CO2e)'),
-      合計排放量: headers.indexOf('合計排放量(公噸CO2e)'),
-      縣市別: headers.indexOf('縣市別'),
-      行業分類: headers.indexOf('行業分類'),
-      地址: headers.indexOf('地址'),
-      lat: headers.indexOf('緯度'),
-      lon: headers.indexOf('經度'),
-    };
-
-    const cell = (row, key) => {
-      const i = col[key];
-      return i >= 0 && row[i] !== undefined ? row[i] : '';
-    };
+    const headerIndex = Object.fromEntries(headers.map((h, idx) => [h, idx]));
+    const yearIdx = headers.indexOf('年度');
+    const latIdx = headers.indexOf('緯度');
+    const lonIdx = headers.indexOf('經度');
 
     const dataRows = lines.slice(1).map((line) => parseCsvLine(line));
     const filteredRows = dataRows.filter((row) => {
-      const lat = parseFloat(cell(row, 'lat'));
-      const lon = parseFloat(cell(row, 'lon'));
+      const lat = latIdx >= 0 ? parseFloat(row[latIdx]) : NaN;
+      const lon = lonIdx >= 0 ? parseFloat(row[lonIdx]) : NaN;
       if (isNaN(lat) || isNaN(lon)) return false;
       if (filterYear != null) {
-        const y = col.年度 >= 0 ? String(row[col.年度] ?? '').trim() : '';
+        const y = yearIdx >= 0 ? String(row[yearIdx] ?? '').trim() : '';
         if (y !== filterYear) return false;
       }
       return true;
@@ -1998,36 +2012,43 @@ export async function loadReportWithGoogleLocationData(layer) {
     const geoJsonData = {
       type: 'FeatureCollection',
       features: filteredRows.map((row, index) => {
-          const lat = parseFloat(cell(row, 'lat'));
-          const lon = parseFloat(cell(row, 'lon'));
+          const lat = latIdx >= 0 ? parseFloat(row[latIdx]) : NaN;
+          const lon = lonIdx >= 0 ? parseFloat(row[lonIdx]) : NaN;
           const id = index + 1;
 
-          const 事業名稱 = cell(row, '事業名稱');
-          const propertyData = {
-            年度: cell(row, '年度'),
-            管制編號: cell(row, '管制編號'),
-            事業名稱,
-            事業統編: cell(row, '事業統編'),
-            直接排放量_公噸CO2e: cell(row, '直接排放量'),
-            能源間接排放量_公噸CO2e: cell(row, '能源間接排放量'),
-            合計排放量_公噸CO2e: cell(row, '合計排放量'),
-            縣市別: cell(row, '縣市別'),
-            行業分類: cell(row, '行業分類'),
-            地址: cell(row, '地址'),
-          };
+          /** 固定欄位順序（與 CSV 欄位對應；表頭若有額外欄位則接在後面） */
+          const propertyData = {};
+          for (const key of REPORT_WITH_GOOGLE_LOCATION_PROPERTY_ORDER) {
+            const idx = headerIndex[key];
+            if (idx !== undefined) {
+              propertyData[key] =
+                row[idx] !== undefined && row[idx] !== null ? row[idx] : '';
+            }
+          }
+          for (let i = 0; i < headers.length; i++) {
+            const h = headers[i];
+            if (!h || Object.prototype.hasOwnProperty.call(propertyData, h)) continue;
+            propertyData[h] = row[i] !== undefined && row[i] !== null ? row[i] : '';
+          }
 
-          const fillColor = getComputedStyle(document.documentElement)
-            .getPropertyValue(`--my-color-${colorName}`)
-            .trim();
+          const 事業名稱 = propertyData['事業名稱'] ?? '';
+
+          const fillColor =
+            layerColorHex ||
+            getComputedStyle(document.documentElement)
+              .getPropertyValue(`--my-color-${colorName || 'blue'}`)
+              .trim();
 
           const tableData = {
             '#': id,
             color: fillColor,
-            事業名稱,
-            縣市別: propertyData.縣市別,
-            合計排放量_公噸CO2e: propertyData.合計排放量_公噸CO2e,
-            地址: propertyData.地址,
           };
+          for (const key of REPORT_WITH_GOOGLE_LOCATION_PROPERTY_ORDER) {
+            if (REPORT_WITH_GOOGLE_LOCATION_TABLE_SKIP.has(key)) continue;
+            if (headerIndex[key] !== undefined) {
+              tableData[key] = propertyData[key];
+            }
+          }
 
           return {
             type: 'Feature',
@@ -2042,6 +2063,8 @@ export async function loadReportWithGoogleLocationData(layer) {
               name: 事業名稱,
               fillColor,
               propertyData,
+              /** MapTab popup 僅列出 propertyData，不附加 id / layerId 等 */
+              popupOnlyPropertyData: true,
               popupData: { name: 事業名稱 },
               tableData,
             },
@@ -2055,7 +2078,7 @@ export async function loadReportWithGoogleLocationData(layer) {
 
     const districtCounts = {};
     geoJsonData.features.forEach((feature) => {
-      const district = feature.properties.propertyData.縣市別;
+      const district = feature.properties.propertyData['縣市別'];
       if (district) {
         districtCounts[district] = (districtCounts[district] || 0) + 1;
       }

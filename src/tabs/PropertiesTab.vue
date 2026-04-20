@@ -387,8 +387,12 @@
       <div>
         <div
           v-if="selectedLayer"
-          :class="`my-bgcolor-${selectedLayer.colorName}`"
-          :style="{ minHeight: '4px' }"
+          :class="selectedLayer.layerColor ? undefined : `my-bgcolor-${selectedLayer.colorName}`"
+          :style="
+            selectedLayer.layerColor
+              ? { minHeight: '4px', backgroundColor: selectedLayer.layerColor }
+              : { minHeight: '4px' }
+          "
         ></div>
 
         <div class="p-3">
