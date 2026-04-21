@@ -33,8 +33,14 @@
 
       /** 「事業」群組：依輸入篩選（事業統編或圖層名稱／事業名稱子字串）；空白則顯示全部 */
       const businessLayerSearch = ref('');
+      /** 行業分類篩選：空白表示全部 */
+      const businessIndustryFilter = ref('');
+
+      const businessLayerIndustryOptions = computed(() => dataStore.businessLayerIndustryOptions);
 
       const layerMatchesBusinessGroupFilter = (layer) => {
+        const ind = businessIndustryFilter.value.trim();
+        if (ind && layer.reportBizIndustry !== ind) return false;
         const q = businessLayerSearch.value.trim();
         if (!q) return true;
         const id = layer.filterBizId != null ? String(layer.filterBizId) : '';
@@ -52,7 +58,9 @@
       const toggleAllInGroup = (groupName) => {
         if (groupName === '事業') {
           const q = businessLayerSearch.value.trim();
-          const layerPredicate = q === '' ? undefined : (l) => layerMatchesBusinessGroupFilter(l);
+          const ind = businessIndustryFilter.value.trim();
+          const layerPredicate =
+            q === '' && ind === '' ? undefined : (l) => layerMatchesBusinessGroupFilter(l);
           dataStore.toggleAllLayersInGroup(groupName, { layerPredicate });
           return;
         }
@@ -67,9 +75,33 @@
         return panel.length > 0 && panel.every((l) => l.visible);
       };
 
-      const clearBusinessLayerSearch = () => {
+      const clearBusinessLayerFilters = () => {
         businessLayerSearch.value = '';
+        businessIndustryFilter.value = '';
       };
+
+      const businessIndustryDropdownLabel = computed(() => {
+        const v = businessIndustryFilter.value.trim();
+        if (!v) return '全部行業';
+        return v.length > 14 ? `${v.slice(0, 14)}…` : v;
+      });
+
+      /** 下拉按鈕左側小圓點：與選項顏色一致（全部＝中性灰） */
+      const businessIndustrySelectedDotColor = computed(() => {
+        const v = businessIndustryFilter.value.trim();
+        if (!v) return null;
+        const opts = businessLayerIndustryOptions.value;
+        const opt = Array.isArray(opts) ? opts.find((o) => o.value === v) : null;
+        return opt?.color ?? null;
+      });
+
+      const setBusinessIndustryFilter = (value) => {
+        businessIndustryFilter.value = value;
+      };
+
+      const hasBusinessLayerFilters = computed(
+        () => !!(businessLayerSearch.value.trim() || businessIndustryFilter.value.trim())
+      );
 
       // 📤 將需要暴露給 <template> 使用的數據和方法返回
       return {
@@ -80,7 +112,13 @@
         groupPanelLayerCount,
         panelLayersForGroup,
         businessLayerSearch,
-        clearBusinessLayerSearch,
+        businessIndustryFilter,
+        businessLayerIndustryOptions,
+        businessIndustryDropdownLabel,
+        businessIndustrySelectedDotColor,
+        setBusinessIndustryFilter,
+        clearBusinessLayerFilters,
+        hasBusinessLayerFilters,
         layerListRef,
         getIcon,
         truncateCompanyNameForLayerDisplay,
@@ -125,7 +163,70 @@
             </div>
           </div>
 
-          <div v-if="group.groupName === '事業'" class="pb-2">
+          <div v-if="group.groupName === '事業'" class="pb-2 d-flex flex-column gap-2">
+            <div
+              v-if="businessLayerIndustryOptions.length"
+              class="dropdown layer-industry-dropdown"
+              @click.stop
+            >
+              <button
+                class="btn my-btn-outline-gray my-btn-slim d-flex align-items-center justify-content-between w-100 text-start gap-2"
+                type="button"
+                data-bs-toggle="dropdown"
+                data-bs-display="static"
+                aria-expanded="false"
+              >
+                <span class="d-flex align-items-center gap-2 min-w-0 flex-grow-1">
+                  <span
+                    class="rounded-circle flex-shrink-0 layer-industry-dot"
+                    :class="{
+                      'layer-industry-dot--neutral': !businessIndustrySelectedDotColor,
+                    }"
+                    :style="
+                      businessIndustrySelectedDotColor
+                        ? { backgroundColor: businessIndustrySelectedDotColor }
+                        : undefined
+                    "
+                    aria-hidden="true"
+                  ></span>
+                  <span class="text-truncate my-content-sm-black">{{
+                    businessIndustryDropdownLabel
+                  }}</span>
+                </span>
+                <span class="my-content-xs-gray flex-shrink-0">行業分類</span>
+              </button>
+              <ul class="dropdown-menu w-100 shadow-sm" style="max-height: 240px; overflow-y: auto">
+                <li>
+                  <button
+                    type="button"
+                    class="dropdown-item d-flex align-items-center my-content-sm-black py-2"
+                    :class="{ active: !businessIndustryFilter.trim() }"
+                    @click="setBusinessIndustryFilter('')"
+                  >
+                    <span
+                      class="rounded-circle flex-shrink-0 me-2 layer-industry-dot layer-industry-dot--neutral"
+                      aria-hidden="true"
+                    ></span>
+                    <span class="text-truncate">全部行業</span>
+                  </button>
+                </li>
+                <li v-for="opt in businessLayerIndustryOptions" :key="opt.value">
+                  <button
+                    type="button"
+                    class="dropdown-item d-flex align-items-center my-content-sm-black py-2"
+                    :class="{ active: businessIndustryFilter === opt.value }"
+                    @click="setBusinessIndustryFilter(opt.value)"
+                  >
+                    <span
+                      class="rounded-circle flex-shrink-0 me-2 layer-industry-dot"
+                      :style="{ backgroundColor: opt.color }"
+                      aria-hidden="true"
+                    ></span>
+                    <span class="text-truncate">{{ opt.label }}</span>
+                  </button>
+                </li>
+              </ul>
+            </div>
             <div class="d-flex gap-1 align-items-stretch">
               <input
                 v-model="businessLayerSearch"
@@ -139,8 +240,8 @@
                 type="button"
                 class="btn my-btn-outline-gray my-btn-slim text-nowrap flex-shrink-0"
                 title="重設篩選"
-                :disabled="!businessLayerSearch.trim()"
-                @click.stop="clearBusinessLayerSearch"
+                :disabled="!hasBusinessLayerFilters"
+                @click.stop="clearBusinessLayerFilters"
               >
                 重設
               </button>
@@ -211,6 +312,15 @@
 </template>
 
 <style scoped>
+  .layer-industry-dot {
+    width: 8px;
+    height: 8px;
+  }
+
+  .layer-industry-dot--neutral {
+    background-color: var(--my-color-gray-400, #ced4da);
+  }
+
   /* 🎨 圖層切換開關樣式 (Layer Toggle Switch Styles) */
   /* https://www.tpisoftware.com/tpu/articleDetails/2744 */
 

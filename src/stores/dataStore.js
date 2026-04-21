@@ -17,6 +17,12 @@ export const useDataStore = defineStore(
     /** 等時圈自動載入時優先載入的「最新年度」事業圖層 id（report-year-113 等） */
     const primaryCarbonReportLayerId = ref(null);
 
+    /**
+     * 事業圖層用：依「行業分類」著色後，下拉選單選項（與 {@link initReportYearLayers} 同步填入）
+     * @type {import('vue').Ref<Array<{ value: string, label: string, color: string }>>}
+     */
+    const businessLayerIndustryOptions = ref([]);
+
     const layers = ref([
       {
         groupName: '年度',
@@ -296,6 +302,7 @@ export const useDataStore = defineStore(
           console.warn('碳排 CSV 無法解析（無表頭或無資料列）');
           infra.groupLayers = preserved;
           if (bizGroup) bizGroup.groupLayers = [];
+          businessLayerIndustryOptions.value = [];
           primaryCarbonReportLayerId.value = null;
           return;
         }
@@ -347,14 +354,40 @@ export const useDataStore = defineStore(
           if (bizIds.length === 0) {
             console.warn('碳排 CSV 中未解析到任何事業統編（緯經度有效且「事業統編」非空）');
             bizGroup.groupLayers = [];
+            businessLayerIndustryOptions.value = [];
           } else {
-            const bizLayers = bizIds.map((bizId, i) => {
+            const industryHeader = meta?.headerIndex?.['行業分類'];
+            const bizIndustry = new Map();
+            for (const bizId of bizIds) {
               const rows = rowsByBizId[bizId] ?? [];
+              let ind =
+                industryHeader !== undefined && rows[0]
+                  ? String(rows[0][industryHeader] ?? '').trim()
+                  : '';
+              if (!ind) ind = '（未填）';
+              bizIndustry.set(bizId, ind);
+            }
+            const uniqueIndustries = [
+              ...new Set(bizIds.map((id) => bizIndustry.get(id))),
+            ].sort((a, b) => a.localeCompare(b, 'zh-Hant'));
+            const industryColorByName = Object.fromEntries(
+              uniqueIndustries.map((name, i) => [name, palette[i % palette.length]])
+            );
+            businessLayerIndustryOptions.value = uniqueIndustries.map((name) => ({
+              value: name,
+              label: name,
+              color: industryColorByName[name],
+            }));
+
+            const bizLayers = bizIds.map((bizId) => {
+              const rows = rowsByBizId[bizId] ?? [];
+              const industry = bizIndustry.get(bizId) ?? '（未填）';
+              const layerColor = industryColorByName[industry] ?? palette[0];
               const layerStub = {
                 layerId: `report-biz-${bizId}`,
                 layerName: carbonReportBizLayerName(meta, bizId, rows),
                 filterBizId: bizId,
-                layerColor: palette[i % palette.length],
+                layerColor,
               };
               carbonReportBizPayloadByBizId[bizId] = buildCarbonReportPayloadFromRows(
                 layerStub,
@@ -365,6 +398,7 @@ export const useDataStore = defineStore(
                 layerId: layerStub.layerId,
                 layerName: layerStub.layerName,
                 filterBizId: bizId,
+                reportBizIndustry: industry,
                 visible: false,
                 isLoading: false,
                 isLoaded: false,
@@ -390,6 +424,7 @@ export const useDataStore = defineStore(
         carbonReportBizPayloadByBizId = Object.create(null);
         infra.groupLayers = preserved;
         if (bizGroup) bizGroup.groupLayers = [];
+        businessLayerIndustryOptions.value = [];
         primaryCarbonReportLayerId.value = null;
       }
     };
@@ -2748,6 +2783,7 @@ export const useDataStore = defineStore(
 
     return {
       layers,
+      businessLayerIndustryOptions,
       findLayerById, // 根據 ID 尋找圖層
       getAllLayers, // 獲取所有圖層的扁平陣列
       initReportYearLayers,
