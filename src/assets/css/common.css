@@ -702,3 +702,14 @@ body.my-no-select * {
 .my-cursor-pointer {
   cursor: pointer;
 }
+
+/*
+ * Dashboard 年度趨勢 D3 圖刻度：與圖例 my-content-xs-gray 同 token（--my-font-size-xs）。
+ * 用 !important 避免被外層或 scoped 覆蓋；勿在 D3 再寫死 font-size 屬性以免打架。
+ */
+.dashboard-carbon-trend-chart svg text.dashboard-chart-axis-text {
+  font-size: var(--my-font-size-xs) !important;
+  fill: var(--my-color-gray-600) !important;
+  font-weight: var(--my-font-weight-md) !important;
+  font-family: var(--my-font-family-primary), "Noto Sans TC", sans-serif !important;
+}

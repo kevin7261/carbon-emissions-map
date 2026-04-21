@@ -7,6 +7,8 @@
 
   const activeLayerTab = ref(null); /** 📑 當前作用中的圖層分頁 */
   const carbonTrendChartRef = ref(null); /** 📊 事業年度碳排折線圖 */
+  /** 折線圖 hover：數值顯示於圖例欄（與圖例同 my-content-xs-gray） */
+  const carbonTrendHoverRow = ref(null);
 
   const currentLayer = computed(() => {
     if (!activeLayerTab.value) return null;
@@ -81,17 +83,18 @@
   };
 
   const drawCarbonTrendLineChart = (trend) => {
+    carbonTrendHoverRow.value = null;
     if (!carbonTrendChartRef.value || !trend || trend.length === 0) {
       return;
     }
 
     d3.select(carbonTrendChartRef.value).selectAll('*').remove();
 
-    const margin = { top: 12, right: 16, bottom: 36, left: 52 };
+    const margin = { top: 8, right: 12, bottom: 28, left: 48 };
     const el = carbonTrendChartRef.value;
     const baseW = measureCarbonTrendChartWidth(el);
     const width = Math.max(120, baseW - margin.left - margin.right);
-    const height = 220;
+    const height = 150;
     const totalH = height + margin.top + margin.bottom;
     const years = trend.map((d) => String(d.year));
 
@@ -161,7 +164,7 @@
       .attr('class', 'dashboard-chart-axis-text')
       .attr('x', (y) => xScale(y))
       .attr('y', 0)
-      .attr('dy', '1.1em')
+      .attr('dy', '1.05em')
       .attr('text-anchor', 'middle')
       .text((y) => `${y}年`);
 
@@ -176,6 +179,72 @@
       .attr('dy', '0.35em')
       .attr('text-anchor', 'end')
       .text((d) => d3.format('.2s')(d));
+
+    const focus = g
+      .append('g')
+      .attr('class', 'dashboard-chart-focus')
+      .style('opacity', 0)
+      .style('pointer-events', 'none');
+
+    const hoverLine = focus
+      .append('line')
+      .attr('class', 'dashboard-chart-hover-line')
+      .attr('y1', 0)
+      .attr('y2', height);
+
+    const focusDots = series.map((s) =>
+      focus
+        .append('circle')
+        .attr('class', 'dashboard-chart-focus-dot')
+        .attr('r', 4)
+        .attr('fill', '#fff')
+        .attr('stroke', s.color)
+        .attr('stroke-width', 2)
+    );
+
+    /** 繪圖區寬度均分：每個年度佔相同 hover 帶寬，垂線仍對齊該年度資料點 */
+    const yearFromMxEqualBands = (mx) => {
+      if (!years.length) return years[0];
+      const w = Math.max(1e-6, width);
+      const clamped = Math.max(0, Math.min(w, mx));
+      const idx = Math.min(years.length - 1, Math.floor((clamped / w) * years.length));
+      return years[idx];
+    };
+
+    const showHover = (yearStr) => {
+      const row = trend.find((t) => String(t.year) === yearStr);
+      if (!row) return;
+      const lx = xScale(yearStr);
+      hoverLine.attr('x1', lx).attr('x2', lx);
+
+      const cys = series.map((s) => yScale(row[s.key] ?? 0));
+      series.forEach((s, i) => {
+        focusDots[i].attr('cx', lx).attr('cy', cys[i]);
+      });
+
+      carbonTrendHoverRow.value = {
+        year: yearStr,
+        direct: row.direct,
+        indirect: row.indirect,
+        total: row.total,
+      };
+
+      focus.style('opacity', 1);
+    };
+
+    g.append('rect')
+      .attr('width', width)
+      .attr('height', height)
+      .attr('fill', 'transparent')
+      .style('cursor', 'crosshair')
+      .on('mousemove', function (event) {
+        const [mx] = d3.pointer(event, this);
+        showHover(yearFromMxEqualBands(mx));
+      })
+      .on('mouseleave', () => {
+        focus.style('opacity', 0);
+        carbonTrendHoverRow.value = null;
+      });
   };
 
   /** 依目前圖層重繪統計圖 */
@@ -199,6 +268,7 @@
       });
     } else if (carbonTrendChartRef.value) {
       d3.select(carbonTrendChartRef.value).selectAll('*').remove();
+      carbonTrendHoverRow.value = null;
     }
   };
 
@@ -332,12 +402,7 @@
             <div class="rounded-4 my-bgcolor-gray-100 p-3 mb-3">
               <div class="my-title-sm-black mb-3 d-flex flex-wrap align-items-baseline gap-2">
                 <span>排放量</span>
-                <span
-                  v-if="currentLayer?.isCarbonReportYearLayer"
-                  class="my-content-xs-gray fw-normal"
-                >
-                  (公噸 CO₂e)
-                </span>
+                <span class="my-content-xs-gray fw-normal">(公噸 CO₂e)</span>
               </div>
               <div class="row g-3">
                 <div class="col-md-4">
@@ -355,12 +420,6 @@
                       <span class="dashboard-carbon-total-figure text-nowrap">{{
                         formatCarbonTons(currentLayerSummary.carbonFacilityTotals.direct)
                       }}</span>
-                      <span
-                        v-if="!currentLayer?.isCarbonReportYearLayer"
-                        class="dashboard-carbon-total-unit text-nowrap"
-                      >
-                        公噸 CO₂e
-                      </span>
                     </div>
                     <div class="my-content-xs-gray mt-2">直接排放</div>
                   </div>
@@ -380,12 +439,6 @@
                       <span class="dashboard-carbon-total-figure text-nowrap">{{
                         formatCarbonTons(currentLayerSummary.carbonFacilityTotals.indirect)
                       }}</span>
-                      <span
-                        v-if="!currentLayer?.isCarbonReportYearLayer"
-                        class="dashboard-carbon-total-unit text-nowrap"
-                      >
-                        公噸 CO₂e
-                      </span>
                     </div>
                     <div class="my-content-xs-gray mt-2">能源間接排放</div>
                   </div>
@@ -405,12 +458,6 @@
                       <span class="dashboard-carbon-total-figure text-nowrap">{{
                         formatCarbonTons(currentLayerSummary.carbonFacilityTotals.total)
                       }}</span>
-                      <span
-                        v-if="!currentLayer?.isCarbonReportYearLayer"
-                        class="dashboard-carbon-total-unit text-nowrap"
-                      >
-                        公噸 CO₂e
-                      </span>
                     </div>
                     <div class="my-content-xs-gray mt-2">合計排放</div>
                   </div>
@@ -425,22 +472,64 @@
             class="col-12"
           >
             <div class="rounded-4 my-bgcolor-gray-100 p-3 mb-3">
-              <div class="my-title-sm-black mb-3">年度趨勢</div>
-              <div class="d-flex flex-wrap gap-3 mb-2 my-content-xs-gray">
-                <span class="d-inline-flex align-items-center gap-1">
-                  <span class="dashboard-carbon-legend-line" style="background: var(--my-color-green)"></span>
-                  直接
-                </span>
-                <span class="d-inline-flex align-items-center gap-1">
-                  <span class="dashboard-carbon-legend-line" style="background: var(--my-color-blue)"></span>
-                  能源間接
-                </span>
-                <span class="d-inline-flex align-items-center gap-1">
-                  <span class="dashboard-carbon-legend-line" style="background: var(--my-color-orange)"></span>
-                  合計
-                </span>
+              <div class="my-title-sm-black mb-2">年度趨勢</div>
+              <div class="dashboard-carbon-trend-stack d-flex flex-column gap-2">
+                <div ref="carbonTrendChartRef" class="dashboard-carbon-trend-chart w-100"></div>
+                <div
+                  class="dashboard-carbon-trend-legend-panel rounded-3 my-bgcolor-white px-3 py-2"
+                >
+                  <div
+                    class="d-flex flex-wrap align-items-center justify-content-center gap-2 gap-md-3 my-content-xs-gray"
+                  >
+                    <div v-if="carbonTrendHoverRow" class="text-nowrap flex-shrink-0">
+                      {{ carbonTrendHoverRow.year }}年
+                    </div>
+                    <div
+                      class="d-flex flex-wrap align-items-baseline justify-content-center gap-2 gap-md-3"
+                    >
+                      <span class="d-inline-flex align-items-center gap-2 text-nowrap">
+                        <span
+                          class="dashboard-carbon-legend-line flex-shrink-0"
+                          style="background: var(--my-color-green)"
+                        ></span>
+                        <span>直接</span>
+                        <template v-if="carbonTrendHoverRow">
+                          <span class="tabular-nums">{{
+                            formatCarbonTons(carbonTrendHoverRow.direct)
+                          }}</span>
+                          <span class="fw-normal">公噸 CO₂e</span>
+                        </template>
+                      </span>
+                      <span class="d-inline-flex align-items-center gap-2 text-nowrap">
+                        <span
+                          class="dashboard-carbon-legend-line flex-shrink-0"
+                          style="background: var(--my-color-blue)"
+                        ></span>
+                        <span>能源間接</span>
+                        <template v-if="carbonTrendHoverRow">
+                          <span class="tabular-nums">{{
+                            formatCarbonTons(carbonTrendHoverRow.indirect)
+                          }}</span>
+                          <span class="fw-normal">公噸 CO₂e</span>
+                        </template>
+                      </span>
+                      <span class="d-inline-flex align-items-center gap-2 text-nowrap">
+                        <span
+                          class="dashboard-carbon-legend-line flex-shrink-0"
+                          style="background: var(--my-color-orange)"
+                        ></span>
+                        <span>合計</span>
+                        <template v-if="carbonTrendHoverRow">
+                          <span class="tabular-nums">{{
+                            formatCarbonTons(carbonTrendHoverRow.total)
+                          }}</span>
+                          <span class="fw-normal">公噸 CO₂e</span>
+                        </template>
+                      </span>
+                    </div>
+                  </div>
+                </div>
               </div>
-              <div ref="carbonTrendChartRef" class="dashboard-carbon-trend-chart w-100"></div>
               <div class="mt-4 pt-3 border-top border-secondary border-opacity-25">
                 <div class="my-title-sm-black mb-2 d-flex flex-wrap align-items-baseline gap-2">
                   <span>各年度排放量</span>
@@ -504,14 +593,21 @@
 </template>
 
 <style scoped>
-  :deep(svg .dashboard-chart-axis-text) {
-    font-size: var(--my-font-size-xs);
-    fill: var(--my-color-gray-600);
+  /* 刻度樣式見 common.css：與圖例同 --my-font-size-xs */
+
+  :deep(svg .dashboard-chart-hover-line) {
+    stroke: var(--my-color-gray-500);
+    stroke-width: 1;
+    stroke-dasharray: 4 3;
   }
 
   .dashboard-carbon-trend-chart {
     width: 100%;
     min-width: 100%;
+  }
+
+  .dashboard-carbon-trend-legend-panel {
+    border: 1px solid var(--my-color-gray-200);
   }
 
   .dashboard-carbon-legend-line {
@@ -528,26 +624,24 @@
     line-height: 1.25;
   }
 
-  .dashboard-carbon-total-unit {
-    font-size: var(--my-font-size-xs);
-  }
-
-  .dashboard-carbon-total-card--direct .dashboard-carbon-total-figure,
-  .dashboard-carbon-total-card--direct .dashboard-carbon-total-unit {
+  .dashboard-carbon-total-card--direct .dashboard-carbon-total-figure {
     color: var(--my-color-green);
   }
 
-  .dashboard-carbon-total-card--indirect .dashboard-carbon-total-figure,
-  .dashboard-carbon-total-card--indirect .dashboard-carbon-total-unit {
+  .dashboard-carbon-total-card--indirect .dashboard-carbon-total-figure {
     color: var(--my-color-blue);
   }
 
-  .dashboard-carbon-total-card--combined .dashboard-carbon-total-figure,
-  .dashboard-carbon-total-card--combined .dashboard-carbon-total-unit {
+  .dashboard-carbon-total-card--combined .dashboard-carbon-total-figure {
     color: var(--my-color-orange);
   }
 
-  .dashboard-yearly-emissions-table tbody tr:last-child {
+  /* 數字欄有 color 時，表格線若用 currentColor 會變成綠／藍／橘／黑線，改為固定灰 */
+  .dashboard-yearly-emissions-table :is(th, td) {
+    border-color: var(--my-color-gray-200) !important;
+  }
+
+  .dashboard-yearly-emissions-table tbody tr:last-child :is(th, td) {
     border-bottom: 0 !important;
   }
 
