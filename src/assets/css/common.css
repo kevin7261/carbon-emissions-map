@@ -269,7 +269,11 @@ body {
   background-color: transparent;
 }
 
-/* 碳排量單位：數字後「公噸CO₂e」，2 為下標（地圖 popup / tooltip 等未 scoped 區塊） */
+/* 碳排量單位：整段「公噸CO₂e」用 xs；2 為下標（地圖 popup / tooltip / 屬性等） */
+.carbon-emission-unit {
+  font-size: var(--my-font-size-xs);
+}
+
 .carbon-emission-unit sub {
   font-size: 0.75em;
   vertical-align: sub;
