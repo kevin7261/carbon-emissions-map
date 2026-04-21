@@ -379,62 +379,6 @@
               <div ref="carbonTrendChartRef" class="w-100"></div>
             </div>
           </div>
-
-          <!-- 事業圖層：各工廠直接／間接／合計與全公司合計 -->
-          <div
-            v-if="currentLayer?.isCarbonReportBizLayer && currentLayerSummary.carbonByFacility != null"
-            class="col-12"
-          >
-            <div class="rounded-4 my-bgcolor-gray-100 p-4 mb-3">
-              <h6 class="mb-3">各工廠／製程碳排量</h6>
-              <div class="table-responsive">
-                <table class="table table-sm align-middle mb-0 my-content-sm-black">
-                  <thead class="table-light">
-                    <tr>
-                      <th scope="col">管制編號</th>
-                      <th scope="col">名稱</th>
-                      <th scope="col" class="text-end">年度</th>
-                      <th scope="col" class="text-end">直接</th>
-                      <th scope="col" class="text-end">能源間接</th>
-                      <th scope="col" class="text-end">合計</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr v-if="!currentLayerSummary.carbonByFacility.length">
-                      <td colspan="6" class="text-center my-content-xs-gray py-3">無可用列</td>
-                    </tr>
-                    <tr
-                      v-for="(row, idx) in currentLayerSummary.carbonByFacility"
-                      :key="(row.facilityCode || '') + '-' + idx"
-                    >
-                      <td class="text-nowrap">{{ row.facilityCode }}</td>
-                      <td>{{ row.facilityName }}</td>
-                      <td class="text-end text-nowrap">
-                        {{ row.reportYear ? row.reportYear + '年' : '—' }}
-                      </td>
-                      <td class="text-end text-nowrap">{{ formatCarbonTons(row.direct) }}</td>
-                      <td class="text-end text-nowrap">{{ formatCarbonTons(row.indirect) }}</td>
-                      <td class="text-end text-nowrap fw-semibold">{{ formatCarbonTons(row.total) }}</td>
-                    </tr>
-                  </tbody>
-                  <tfoot v-if="currentLayerSummary.carbonFacilityTotals" class="table-group-divider">
-                    <tr class="fw-semibold">
-                      <td colspan="3">全部工廠合計</td>
-                      <td class="text-end text-nowrap">
-                        {{ formatCarbonTons(currentLayerSummary.carbonFacilityTotals.direct) }}
-                      </td>
-                      <td class="text-end text-nowrap">
-                        {{ formatCarbonTons(currentLayerSummary.carbonFacilityTotals.indirect) }}
-                      </td>
-                      <td class="text-end text-nowrap">
-                        {{ formatCarbonTons(currentLayerSummary.carbonFacilityTotals.total) }}
-                      </td>
-                    </tr>
-                  </tfoot>
-                </table>
-              </div>
-            </div>
-          </div>
         </div>
       </div>
       <div v-else class="text-center py-5">
