@@ -2124,6 +2124,90 @@ export function buildCarbonReportPayloadFromRows(layer, meta, rows) {
     districtCount,
   };
 
+  /** 碳排 CSV 數值欄位（可能含千分位逗號） */
+  const parseReportCarbonTonCell = (cell) => {
+    if (cell == null || cell === '') return NaN;
+    const n = parseFloat(String(cell).replace(/,/g, '').trim());
+    return Number.isFinite(n) ? n : NaN;
+  };
+
+  /**
+   * 事業（依統編）圖層：各管制編號視為一處製程／工廠，並加總公司層級與年度趨勢。
+   * 工廠列取「該管制編號於資料中的最新年度」列之直接／間接／合計，避免多年度重複加總。
+   * 年度趨勢則依「年度」彙總該事業所有工廠列之和（與各年盤查加總一致）。
+   */
+  if (layer.isCarbonReportBizLayer) {
+    const yearCol = headerIndex['年度'];
+    const codeCol = headerIndex['管制編號'];
+    const nameCol = headerIndex['事業名稱'];
+    const kDirect = '直接排放量(公噸CO2e)';
+    const kIndirect = '能源間接排放量(公噸CO2e)';
+    const kTotal = '合計排放量(公噸CO2e)';
+
+    const byYear = Object.create(null);
+    for (const row of rows || []) {
+      const y = yearCol >= 0 ? String(row[yearCol] ?? '').trim() : '';
+      if (!y) continue;
+      if (!byYear[y]) byYear[y] = { year: y, direct: 0, indirect: 0, total: 0 };
+      const d = parseReportCarbonTonCell(row[headerIndex[kDirect]]);
+      const ind = parseReportCarbonTonCell(row[headerIndex[kIndirect]]);
+      const t = parseReportCarbonTonCell(row[headerIndex[kTotal]]);
+      if (Number.isFinite(d)) byYear[y].direct += d;
+      if (Number.isFinite(ind)) byYear[y].indirect += ind;
+      if (Number.isFinite(t)) byYear[y].total += t;
+    }
+    summaryData.yearlyCarbonTrend = Object.values(byYear).sort(
+      (a, b) => Number(a.year) - Number(b.year)
+    );
+
+    const latestByCode = new Map();
+    (rows || []).forEach((row, idx) => {
+      const codeRaw = codeCol >= 0 ? String(row[codeCol] ?? '').trim() : '';
+      const key = codeRaw || `_nocode_${idx}`;
+      const yStr = yearCol >= 0 ? String(row[yearCol] ?? '').trim() : '';
+      const yNum = yStr === '' ? -Infinity : Number(yStr);
+      const prev = latestByCode.get(key);
+      if (!prev || yNum > prev.yNum) {
+        latestByCode.set(key, { row, yNum });
+      }
+    });
+
+    const carbonByFacility = [];
+    let sumDirect = 0;
+    let sumIndirect = 0;
+    let sumTotal = 0;
+    for (const { row } of latestByCode.values()) {
+      const d = parseReportCarbonTonCell(row[headerIndex[kDirect]]);
+      const indv = parseReportCarbonTonCell(row[headerIndex[kIndirect]]);
+      const tv = parseReportCarbonTonCell(row[headerIndex[kTotal]]);
+      const fd = Number.isFinite(d) ? d : 0;
+      const fi = Number.isFinite(indv) ? indv : 0;
+      const ft = Number.isFinite(tv) ? tv : 0;
+      const facilityCode = codeCol >= 0 ? String(row[codeCol] ?? '').trim() : '';
+      const facilityName = nameCol >= 0 ? String(row[nameCol] ?? '').trim() : '';
+      const reportYear = yearCol >= 0 ? String(row[yearCol] ?? '').trim() : '';
+      carbonByFacility.push({
+        facilityCode: facilityCode || '—',
+        facilityName,
+        reportYear,
+        direct: fd,
+        indirect: fi,
+        total: ft,
+      });
+      sumDirect += fd;
+      sumIndirect += fi;
+      sumTotal += ft;
+    }
+    carbonByFacility.sort((a, b) => b.total - a.total);
+
+    summaryData.carbonByFacility = carbonByFacility;
+    summaryData.carbonFacilityTotals = {
+      direct: sumDirect,
+      indirect: sumIndirect,
+      total: sumTotal,
+    };
+  }
+
   return {
     geoJsonData,
     tableData,

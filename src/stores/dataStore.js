@@ -388,6 +388,8 @@ export const useDataStore = defineStore(
                 layerName: carbonReportBizLayerName(meta, bizId, rows),
                 filterBizId: bizId,
                 layerColor,
+                /** 供 {@link buildCarbonReportPayloadFromRows} 彙總各工廠列與年度趨勢 */
+                isCarbonReportBizLayer: true,
               };
               carbonReportBizPayloadByBizId[bizId] = buildCarbonReportPayloadFromRows(
                 layerStub,
