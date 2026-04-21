@@ -2024,8 +2024,16 @@ export function truncateCompanyNameForLayerDisplay(name) {
   return s;
 }
 
+/** 碳排 CSV 數值欄位（可能含千分位逗號） */
+export function parseReportCarbonTonCell(cell) {
+  if (cell == null || cell === '') return NaN;
+  const n = parseFloat(String(cell).replace(/,/g, '').trim());
+  return Number.isFinite(n) ? n : NaN;
+}
+
 /**
- * 由已解析的列與圖層樣式，組成事業碳排圖層的 geoJson／table／summary（不發網路請求）。
+ * 由已解析的列與圖層樣式，組成碳排報告圖層的 geoJson／table／summary（不發網路請求）。
+ * 事業圖層需 `layer.isCarbonReportBizLayer`；年度圖層需 `layer.isCarbonReportYearLayer`（僅儀表板加總，無多年趨勢）。
  */
 export function buildCarbonReportPayloadFromRows(layer, meta, rows) {
   if (!meta) {
@@ -2124,13 +2132,6 @@ export function buildCarbonReportPayloadFromRows(layer, meta, rows) {
     districtCount,
   };
 
-  /** 碳排 CSV 數值欄位（可能含千分位逗號） */
-  const parseReportCarbonTonCell = (cell) => {
-    if (cell == null || cell === '') return NaN;
-    const n = parseFloat(String(cell).replace(/,/g, '').trim());
-    return Number.isFinite(n) ? n : NaN;
-  };
-
   /**
    * 事業（依統編）圖層：儀表板加總與年度趨勢與資料表同一來源（本函式產出之 tableData 逐列加總）。
    */
@@ -2168,6 +2169,37 @@ export function buildCarbonReportPayloadFromRows(layer, meta, rows) {
     summaryData.yearlyCarbonTrend = Object.values(byYear).sort(
       (a, b) => Number(a.year) - Number(b.year)
     );
+    summaryData.carbonFacilityTotals = {
+      direct: sumDirect,
+      indirect: sumIndirect,
+      total: sumTotal,
+    };
+  }
+
+  /**
+   * 年度圖層：儀表板加總與資料表相同（tableData 逐列）。圖層僅單一年度，不提供多年「年度趨勢」折線。
+   */
+  if (layer.isCarbonReportYearLayer) {
+    const kDirect = '直接排放量(公噸CO2e)';
+    const kIndirect = '能源間接排放量(公噸CO2e)';
+    const kTotal = '合計排放量(公噸CO2e)';
+
+    let sumDirect = 0;
+    let sumIndirect = 0;
+    let sumTotal = 0;
+
+    for (const row of tableData) {
+      const d = parseReportCarbonTonCell(row[kDirect]);
+      const indv = parseReportCarbonTonCell(row[kIndirect]);
+      const tv = parseReportCarbonTonCell(row[kTotal]);
+      const fd = Number.isFinite(d) ? d : 0;
+      const fi = Number.isFinite(indv) ? indv : 0;
+      const ft = Number.isFinite(tv) ? tv : 0;
+      sumDirect += fd;
+      sumIndirect += fi;
+      sumTotal += ft;
+    }
+
     summaryData.carbonFacilityTotals = {
       direct: sumDirect,
       indirect: sumIndirect,

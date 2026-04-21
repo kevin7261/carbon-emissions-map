@@ -320,6 +320,7 @@ export const useDataStore = defineStore(
               layerName: `${year}年`,
               filterYear: year,
               layerColor: palette[i % palette.length],
+              isCarbonReportYearLayer: true,
             };
             carbonReportYearPayloadByYear[year] = buildCarbonReportPayloadFromRows(
               layerStub,

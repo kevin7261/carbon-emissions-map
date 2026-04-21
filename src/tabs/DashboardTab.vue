@@ -62,10 +62,24 @@
     return layer ? layer.layerName || '未知圖層' : '無開啟圖層';
   });
 
+  /** 事業或年度碳排圖層：顯示與資料表一致之加總；事業另顯多年度趨勢折線 */
+  const showCarbonReportDashboard = computed(() => {
+    const l = currentLayer.value;
+    const s = currentLayerSummary.value;
+    return !!(l && (l.isCarbonReportBizLayer || l.isCarbonReportYearLayer) && s);
+  });
+
   /**
-   * 事業圖層：直接／間接／合計排放量之年度趨勢（多序列折線）
+   * 直接／間接／合計排放量之年度趨勢（多序列折線）
    * @param {Array<{ year: string, direct: number, indirect: number, total: number }>} trend
    */
+  const measureCarbonTrendChartWidth = (el) => {
+    let w = el.clientWidth;
+    if (w <= 0) w = el.getBoundingClientRect().width;
+    if (w <= 0 && el.parentElement) w = el.parentElement.clientWidth;
+    return w > 0 ? w : 800;
+  };
+
   const drawCarbonTrendLineChart = (trend) => {
     if (!carbonTrendChartRef.value || !trend || trend.length === 0) {
       return;
@@ -73,21 +87,25 @@
 
     d3.select(carbonTrendChartRef.value).selectAll('*').remove();
 
-    const margin = { top: 12, right: 24, bottom: 36, left: 56 };
-    const containerWidth = carbonTrendChartRef.value.clientWidth;
-    const baseW = containerWidth > 0 ? containerWidth : 320;
-    const width = baseW - margin.left - margin.right;
+    const margin = { top: 12, right: 16, bottom: 36, left: 52 };
+    const el = carbonTrendChartRef.value;
+    const baseW = measureCarbonTrendChartWidth(el);
+    const width = Math.max(120, baseW - margin.left - margin.right);
     const height = 220;
+    const totalH = height + margin.top + margin.bottom;
     const years = trend.map((d) => String(d.year));
 
     const maxVal = d3.max(trend, (d) => Math.max(d.direct || 0, d.indirect || 0, d.total || 0)) || 0;
     const yMax = maxVal <= 0 ? 1 : maxVal * 1.05;
 
     const svg = d3
-      .select(carbonTrendChartRef.value)
+      .select(el)
       .append('svg')
-      .attr('width', baseW)
-      .attr('height', height + margin.top + margin.bottom);
+      .attr('viewBox', `0 0 ${baseW} ${totalH}`)
+      .attr('preserveAspectRatio', 'xMidYMid meet')
+      .attr('width', '100%')
+      .style('display', 'block')
+      .style('max-width', '100%');
 
     const g = svg.append('g').attr('transform', `translate(${margin.left},${margin.top})`);
 
@@ -140,12 +158,11 @@
       .data(years)
       .enter()
       .append('text')
-      .attr('class', 'my-font-size-xs')
+      .attr('class', 'dashboard-chart-axis-text')
       .attr('x', (y) => xScale(y))
       .attr('y', 0)
       .attr('dy', '1.1em')
       .attr('text-anchor', 'middle')
-      .attr('fill', 'var(--my-color-gray-600)')
       .text((y) => `${y}年`);
 
     g.append('g')
@@ -153,12 +170,11 @@
       .data(yScale.ticks(5))
       .enter()
       .append('text')
-      .attr('class', 'my-font-size-xs')
+      .attr('class', 'dashboard-chart-axis-text')
       .attr('x', -8)
       .attr('y', (d) => yScale(d))
       .attr('dy', '0.35em')
       .attr('text-anchor', 'end')
-      .attr('fill', 'var(--my-color-gray-600)')
       .text((d) => d3.format('.2s')(d));
   };
 
@@ -167,7 +183,20 @@
     const summary = currentLayerSummary.value;
     const layer = currentLayer.value;
     if (layer?.isCarbonReportBizLayer && summary?.yearlyCarbonTrend?.length) {
-      nextTick(() => drawCarbonTrendLineChart(summary.yearlyCarbonTrend));
+      nextTick(() => {
+        drawCarbonTrendLineChart(summary.yearlyCarbonTrend);
+        requestAnimationFrame(() => {
+          const s = currentLayerSummary.value;
+          const l = currentLayer.value;
+          if (
+            carbonTrendChartRef.value &&
+            s?.yearlyCarbonTrend?.length &&
+            l?.isCarbonReportBizLayer
+          ) {
+            drawCarbonTrendLineChart(s.yearlyCarbonTrend);
+          }
+        });
+      });
     } else if (carbonTrendChartRef.value) {
       d3.select(carbonTrendChartRef.value).selectAll('*').remove();
     }
@@ -273,7 +302,7 @@
             }"
             @click="setActiveLayerTab(layer.layerId)"
           >
-            <span class="my-title-sm-black">{{ layer.layerName }}</span>
+            <span class="my-content-sm-black fw-medium">{{ layer.layerName }}</span>
           </div>
           <div
             class="w-100"
@@ -291,34 +320,49 @@
     <!-- 有開啟圖層時的內容 -->
     <div v-if="visibleLayers.length > 0" class="flex-grow-1 overflow-auto my-bgcolor-white p-3">
       <!-- 📊 當前圖層資訊 -->
-      <div class="mb-4">
-        <h5 class="my-title-md-black">{{ currentLayerName }}</h5>
+      <div class="mb-3">
+        <div class="my-title-xl-black">{{ currentLayerName }}</div>
       </div>
 
-      <!-- 📊 事業圖層儀表板（僅事業碳排圖層有內容） -->
-      <div v-if="currentLayer?.isCarbonReportBizLayer && currentLayerSummary">
+      <!-- 📊 事業／年度碳排圖層儀表板 -->
+      <div v-if="showCarbonReportDashboard">
         <div class="row">
-          <!-- 事業圖層：全公司各工廠加總（直接／間接／合計） -->
-          <div
-            v-if="currentLayer?.isCarbonReportBizLayer && currentLayerSummary.carbonFacilityTotals"
-            class="col-12"
-          >
-            <div class="rounded-4 my-bgcolor-gray-100 p-4 mb-3">
-              <h6 class="mb-3">全公司工廠碳排加總</h6>
+          <!-- 加總（直接／間接／合計）：事業＝全公司表列加總；年度＝該年度表列加總 -->
+          <div v-if="currentLayerSummary.carbonFacilityTotals" class="col-12">
+            <div class="rounded-4 my-bgcolor-gray-100 p-3 mb-3">
+              <div class="my-title-sm-black mb-3 d-flex flex-wrap align-items-baseline gap-2">
+                <span>排放量</span>
+                <span
+                  v-if="currentLayer?.isCarbonReportYearLayer"
+                  class="my-content-xs-gray fw-normal"
+                >
+                  (公噸 CO₂e)
+                </span>
+              </div>
               <div class="row g-3">
                 <div class="col-md-4">
                   <div
                     class="text-center rounded-3 my-bgcolor-white px-3 py-3 dashboard-carbon-total-card dashboard-carbon-total-card--direct"
                   >
                     <div
-                      class="d-flex flex-wrap align-items-baseline justify-content-center gap-1 text-break"
+                      class="d-flex align-items-baseline justify-content-center gap-1"
+                      :class="
+                        currentLayer?.isCarbonReportYearLayer
+                          ? 'flex-nowrap text-nowrap overflow-x-auto'
+                          : 'flex-wrap text-break'
+                      "
                     >
-                      <span class="dashboard-carbon-total-figure">{{
+                      <span class="dashboard-carbon-total-figure text-nowrap">{{
                         formatCarbonTons(currentLayerSummary.carbonFacilityTotals.direct)
                       }}</span>
-                      <span class="dashboard-carbon-total-unit text-nowrap">公噸 CO₂e</span>
+                      <span
+                        v-if="!currentLayer?.isCarbonReportYearLayer"
+                        class="dashboard-carbon-total-unit text-nowrap"
+                      >
+                        公噸 CO₂e
+                      </span>
                     </div>
-                    <div class="my-content-sm-gray mt-1">直接排放</div>
+                    <div class="my-content-xs-gray mt-2">直接排放</div>
                   </div>
                 </div>
                 <div class="col-md-4">
@@ -326,14 +370,24 @@
                     class="text-center rounded-3 my-bgcolor-white px-3 py-3 dashboard-carbon-total-card dashboard-carbon-total-card--indirect"
                   >
                     <div
-                      class="d-flex flex-wrap align-items-baseline justify-content-center gap-1 text-break"
+                      class="d-flex align-items-baseline justify-content-center gap-1"
+                      :class="
+                        currentLayer?.isCarbonReportYearLayer
+                          ? 'flex-nowrap text-nowrap overflow-x-auto'
+                          : 'flex-wrap text-break'
+                      "
                     >
-                      <span class="dashboard-carbon-total-figure">{{
+                      <span class="dashboard-carbon-total-figure text-nowrap">{{
                         formatCarbonTons(currentLayerSummary.carbonFacilityTotals.indirect)
                       }}</span>
-                      <span class="dashboard-carbon-total-unit text-nowrap">公噸 CO₂e</span>
+                      <span
+                        v-if="!currentLayer?.isCarbonReportYearLayer"
+                        class="dashboard-carbon-total-unit text-nowrap"
+                      >
+                        公噸 CO₂e
+                      </span>
                     </div>
-                    <div class="my-content-sm-gray mt-1">能源間接排放</div>
+                    <div class="my-content-xs-gray mt-2">能源間接排放</div>
                   </div>
                 </div>
                 <div class="col-md-4">
@@ -341,28 +395,38 @@
                     class="text-center rounded-3 my-bgcolor-white px-3 py-3 dashboard-carbon-total-card dashboard-carbon-total-card--combined"
                   >
                     <div
-                      class="d-flex flex-wrap align-items-baseline justify-content-center gap-1 text-break"
+                      class="d-flex align-items-baseline justify-content-center gap-1"
+                      :class="
+                        currentLayer?.isCarbonReportYearLayer
+                          ? 'flex-nowrap text-nowrap overflow-x-auto'
+                          : 'flex-wrap text-break'
+                      "
                     >
-                      <span class="dashboard-carbon-total-figure">{{
+                      <span class="dashboard-carbon-total-figure text-nowrap">{{
                         formatCarbonTons(currentLayerSummary.carbonFacilityTotals.total)
                       }}</span>
-                      <span class="dashboard-carbon-total-unit text-nowrap">公噸 CO₂e</span>
+                      <span
+                        v-if="!currentLayer?.isCarbonReportYearLayer"
+                        class="dashboard-carbon-total-unit text-nowrap"
+                      >
+                        公噸 CO₂e
+                      </span>
                     </div>
-                    <div class="my-content-sm-gray mt-1">合計排放</div>
+                    <div class="my-content-xs-gray mt-2">合計排放</div>
                   </div>
                 </div>
               </div>
             </div>
           </div>
 
-          <!-- 事業圖層：年度趨勢 -->
+          <!-- 年度趨勢（僅事業圖層：該統編多年度） -->
           <div
             v-if="currentLayer?.isCarbonReportBizLayer && currentLayerSummary.yearlyCarbonTrend?.length"
             class="col-12"
           >
-            <div class="rounded-4 my-bgcolor-gray-100 p-4 mb-3">
-              <h6 class="mb-3">碳排年度趨勢</h6>
-              <div class="d-flex flex-wrap gap-3 mb-2 my-content-xs-black">
+            <div class="rounded-4 my-bgcolor-gray-100 p-3 mb-3">
+              <div class="my-title-sm-black mb-3">年度趨勢</div>
+              <div class="d-flex flex-wrap gap-3 mb-2 my-content-xs-gray">
                 <span class="d-inline-flex align-items-center gap-1">
                   <span class="dashboard-carbon-legend-line" style="background: var(--my-color-green)"></span>
                   直接
@@ -376,26 +440,80 @@
                   合計
                 </span>
               </div>
-              <div ref="carbonTrendChartRef" class="w-100"></div>
+              <div ref="carbonTrendChartRef" class="dashboard-carbon-trend-chart w-100"></div>
+              <div class="mt-4 pt-3 border-top border-secondary border-opacity-25">
+                <div class="my-title-sm-black mb-2 d-flex flex-wrap align-items-baseline gap-2">
+                  <span>各年度排放量</span>
+                  <span class="my-content-xs-gray fw-normal">(公噸 CO₂e)</span>
+                </div>
+                <div class="table-responsive rounded-3 overflow-hidden my-bgcolor-white">
+                  <table class="table table-sm mb-0 dashboard-yearly-emissions-table">
+                    <thead>
+                      <tr class="my-content-xs-gray">
+                        <th class="text-start ps-3 py-2 fw-normal border-0">年度</th>
+                        <th class="text-end py-2 fw-normal border-0">直接</th>
+                        <th class="text-end py-2 fw-normal border-0">能源間接</th>
+                        <th class="text-end pe-3 py-2 fw-normal border-0">合計</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr
+                        v-for="row in currentLayerSummary.yearlyCarbonTrend"
+                        :key="row.year"
+                        class="border-bottom border-secondary border-opacity-10"
+                      >
+                        <td class="text-start ps-3 py-2 align-middle my-content-sm-black">
+                          {{ row.year }}
+                        </td>
+                        <td
+                          class="text-end py-2 align-middle dashboard-yearly-num dashboard-yearly-num--direct"
+                        >
+                          {{ formatCarbonTons(row.direct) }}
+                        </td>
+                        <td
+                          class="text-end py-2 align-middle dashboard-yearly-num dashboard-yearly-num--indirect"
+                        >
+                          {{ formatCarbonTons(row.indirect) }}
+                        </td>
+                        <td
+                          class="text-end pe-3 py-2 align-middle dashboard-yearly-num dashboard-yearly-num--total"
+                        >
+                          {{ formatCarbonTons(row.total) }}
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
             </div>
           </div>
         </div>
       </div>
       <div v-else class="text-center py-5">
-        <div class="my-title-md-gray">此圖層沒有可用的摘要資訊</div>
+        <div class="my-title-sm-gray">此圖層沒有可用的摘要資訊</div>
       </div>
     </div>
 
     <!-- 沒有開啟圖層時的空狀態 -->
     <div v-else class="flex-grow-1 d-flex align-items-center justify-content-center">
       <div class="text-center">
-        <div class="my-title-md-gray p-3">沒有開啟的圖層</div>
+        <div class="my-title-sm-gray p-3">沒有開啟的圖層</div>
       </div>
     </div>
   </div>
 </template>
 
 <style scoped>
+  :deep(svg .dashboard-chart-axis-text) {
+    font-size: var(--my-font-size-xs);
+    fill: var(--my-color-gray-600);
+  }
+
+  .dashboard-carbon-trend-chart {
+    width: 100%;
+    min-width: 100%;
+  }
+
   .dashboard-carbon-legend-line {
     display: inline-block;
     width: 20px;
@@ -403,10 +521,11 @@
     border-radius: 1px;
   }
 
-  /* 與「碳排年度趨勢」折線：直接綠、能源間接藍、合計橘 */
+  /* 「排放量」三欄與「年度趨勢」折線：直接綠、能源間接藍、合計橘 */
   .dashboard-carbon-total-figure {
-    font-size: var(--my-font-size-lg);
+    font-size: var(--my-font-size-2xl);
     font-weight: var(--my-font-weight-xl);
+    line-height: 1.25;
   }
 
   .dashboard-carbon-total-unit {
@@ -425,6 +544,28 @@
 
   .dashboard-carbon-total-card--combined .dashboard-carbon-total-figure,
   .dashboard-carbon-total-card--combined .dashboard-carbon-total-unit {
+    color: var(--my-color-orange);
+  }
+
+  .dashboard-yearly-emissions-table tbody tr:last-child {
+    border-bottom: 0 !important;
+  }
+
+  .dashboard-yearly-num {
+    font-size: var(--my-font-size-sm);
+    font-variant-numeric: tabular-nums;
+    font-weight: var(--my-font-weight-lg);
+  }
+
+  .dashboard-yearly-num--direct {
+    color: var(--my-color-green);
+  }
+
+  .dashboard-yearly-num--indirect {
+    color: var(--my-color-blue);
+  }
+
+  .dashboard-yearly-num--total {
     color: var(--my-color-orange);
   }
 </style>
