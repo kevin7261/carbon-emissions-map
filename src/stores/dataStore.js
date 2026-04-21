@@ -19,7 +19,7 @@ export const useDataStore = defineStore(
 
     const layers = ref([
       {
-        groupName: '年份',
+        groupName: '年度',
         /** 內部圖層（分析／路徑）不顯示在圖層列表；年度圖層由 initReportYearLayers 附加；「事業」群組見另一頂層 group */
         groupLayers: [
           {
@@ -238,19 +238,19 @@ export const useDataStore = defineStore(
       return allLayers;
     };
 
-    /** 碳排 CSV 僅 fetch 一次後，各年份圖層由此取預組 payload（開關圖層不再讀檔） */
+    /** 碳排 CSV 僅 fetch 一次後，各年度圖層由此取預組 payload（開關圖層不再讀檔） */
     let carbonReportYearPayloadByYear = Object.create(null);
 
     const loadCarbonReportYearFromPrecache = (layer) => {
       const y = layer.filterYear != null ? String(layer.filterYear).trim() : '';
       const payload = carbonReportYearPayloadByYear[y];
       if (!payload) {
-        return Promise.reject(new Error(`無預載年份資料: ${y || '(未指定)'}`));
+        return Promise.reject(new Error(`無預載年度資料: ${y || '(未指定)'}`));
       }
       return Promise.resolve(payload);
     };
 
-    /** 與年份相同：依事業統編預載，開關圖層不讀檔 */
+    /** 與年度群組相同：依事業統編預載，開關圖層不讀檔 */
     let carbonReportBizPayloadByBizId = Object.create(null);
 
     const loadCarbonReportBizFromPrecache = (layer) => {
@@ -276,7 +276,7 @@ export const useDataStore = defineStore(
      * 讀取碳排 CSV 一次，依「年度」與 CSV「事業統編」欄分組並預建 geoJson／表格／摘要；開關圖層僅套用預載資料。
      */
     const initReportYearLayers = async () => {
-      const infra = layers.value.find((g) => g.groupName === '年份');
+      const infra = layers.value.find((g) => g.groupName === '年度');
       const bizGroup = layers.value.find((g) => g.groupName === '事業');
       if (!infra) return;
 
@@ -442,7 +442,7 @@ export const useDataStore = defineStore(
     };
 
     /**
-     * 指定分組（如「年份」「事業」）：一鍵全部開啟或全部關閉（若目前已全開則關閉，否則開啟並載入未載入圖層）
+     * 指定分組（如「年度」「事業」）：一鍵全部開啟或全部關閉（若目前已全開則關閉，否則開啟並載入未載入圖層）
      */
     /**
      * @param {string} groupName

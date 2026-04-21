@@ -101,14 +101,14 @@
         >
           <div class="d-flex align-items-center justify-content-between gap-2 pb-2">
             <div class="my-title-xs-gray">
-              <template v-if="group.groupName === '年份' || group.groupName === '事業'">
+              <template v-if="group.groupName === '年度' || group.groupName === '事業'">
                 {{ group.groupName }}（{{ groupPanelLayerCount(group) }}）
               </template>
               <template v-else>{{ group.groupName }}</template>
             </div>
             <div
               v-if="
-                (group.groupName === '年份' || group.groupName === '事業') &&
+                (group.groupName === '年度' || group.groupName === '事業') &&
                 panelLayersForGroup(group).length > 0
               "
               class="d-flex align-items-center justify-content-center flex-shrink-0"
@@ -138,11 +138,11 @@
               <button
                 type="button"
                 class="btn my-btn-outline-gray my-btn-slim text-nowrap flex-shrink-0"
-                title="清空篩選"
+                title="重設篩選"
                 :disabled="!businessLayerSearch.trim()"
                 @click.stop="clearBusinessLayerSearch"
               >
-                清空
+                重設
               </button>
             </div>
           </div>
