@@ -331,7 +331,7 @@
 
 <template>
   <!-- 📊 多圖層資料儀表板視圖組件 -->
-  <div class="d-flex flex-column my-bgcolor-gray-200 h-100">
+  <div class="d-flex flex-column my-bgcolor-gray-200 h-100 min-h-0">
     <!-- 📑 圖層分頁導航 -->
     <div v-if="visibleLayers.length > 0" class="">
       <ul class="nav nav-tabs nav-fill">

@@ -250,20 +250,22 @@
         />
       </div>
 
-      <!-- 儀表板分頁內容 -->
+      <!-- 儀表板分頁內容（外層不捲動，捲動由 DashboardTab 內層處理） -->
       <div
         v-show="activeUpperTab === 'dashboard'"
         ref="dashboardContainerRef"
-        class="h-100 overflow-auto pt-5"
+        class="h-100 min-h-0 d-flex flex-column overflow-hidden pt-5"
       >
         <!-- 🎛️ 為導航按鈕組預留空間 (Reserve Space for Navigation Buttons) -->
-        <div style="height: 40px"></div>
-        <DashboardTab
-          ref="DashboardTab"
-          :containerHeight="contentHeight"
-          :isPanelDragging="isPanelDragging"
-          :activeMarkers="activeMarkers"
-        />
+        <div class="flex-shrink-0" style="height: 40px"></div>
+        <div class="flex-grow-1 min-h-0 d-flex flex-column overflow-hidden">
+          <DashboardTab
+            ref="DashboardTab"
+            :containerHeight="contentHeight"
+            :isPanelDragging="isPanelDragging"
+            :activeMarkers="activeMarkers"
+          />
+        </div>
       </div>
     </div>
   </div>
