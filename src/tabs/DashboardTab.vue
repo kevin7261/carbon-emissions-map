@@ -513,6 +513,33 @@
                         ref="carbonTrendChartRef"
                         class="dashboard-carbon-trend-chart dashboard-carbon-trend-chart--plot w-100 h-100 flex-grow-1 min-h-0"
                       ></div>
+                      <div
+                        class="dashboard-carbon-trend-legend d-flex flex-wrap align-items-center justify-content-center column-gap-4 row-gap-2 mt-2 pt-1 flex-shrink-0"
+                        role="list"
+                        aria-label="年度趨勢圖例"
+                      >
+                        <div class="d-flex align-items-center gap-2" role="listitem">
+                          <span
+                            class="dashboard-carbon-trend-legend-line dashboard-carbon-trend-legend-line--direct"
+                            aria-hidden="true"
+                          ></span>
+                          <span class="my-content-xs-gray">直接</span>
+                        </div>
+                        <div class="d-flex align-items-center gap-2" role="listitem">
+                          <span
+                            class="dashboard-carbon-trend-legend-line dashboard-carbon-trend-legend-line--indirect"
+                            aria-hidden="true"
+                          ></span>
+                          <span class="my-content-xs-gray">能源間接</span>
+                        </div>
+                        <div class="d-flex align-items-center gap-2" role="listitem">
+                          <span
+                            class="dashboard-carbon-trend-legend-line dashboard-carbon-trend-legend-line--total"
+                            aria-hidden="true"
+                          ></span>
+                          <span class="my-content-xs-gray">合計</span>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </div>

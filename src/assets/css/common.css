@@ -716,3 +716,23 @@ body.my-no-select * {
   font-weight: var(--my-font-weight-md) !important;
   font-family: var(--my-font-family-primary), "Noto Sans TC", sans-serif !important;
 }
+
+/* Dashboard 年度趨勢折線圖下方圖例（與「各年度排放量」表頭用語一致） */
+.dashboard-carbon-trend-legend-line {
+  flex-shrink: 0;
+  width: 1.25rem;
+  height: 3px;
+  border-radius: 2px;
+}
+
+.dashboard-carbon-trend-legend-line--direct {
+  background-color: var(--my-color-green);
+}
+
+.dashboard-carbon-trend-legend-line--indirect {
+  background-color: var(--my-color-blue);
+}
+
+.dashboard-carbon-trend-legend-line--total {
+  background-color: var(--my-color-orange);
+}
