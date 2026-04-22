@@ -67,6 +67,52 @@
     return currentLayerSummary.value.carbonByFacilityName ?? [];
   });
 
+  /**
+   * 有內層分頁（全部／各廠）時：'all' 或 事業的陣列索引
+   * @type {import('vue').Ref<'all' | number>}
+   */
+  const activeCarbonScopeTab = ref('all');
+
+  const setActiveCarbonScopeTab = (scope) => {
+    activeCarbonScopeTab.value = scope;
+  };
+
+  /**
+   * 內層分頁標籤：取「事業名稱」內第一個「公司」**之後**的字（廠名習慣在後段）；沒有「公司」則用全名
+   * @param {string} [facilityName]
+   * @returns {string}
+   */
+  const labelAfterGongsi = (facilityName) => {
+    const s = String(facilityName ?? '').trim();
+    if (!s) return '—';
+    const i = s.indexOf('公司');
+    if (i < 0) return s;
+    const rest = s.slice(i + 2).trim();
+    return rest || s;
+  };
+
+  const carbonScopeTabItems = computed(() => {
+    if (!showCarbonByFacility.value) return [];
+    return [
+      { key: 'all', label: '全部' },
+      ...carbonByFacilityNameList.value.map((f, i) => ({
+        key: i,
+        label: labelAfterGongsi(f.facilityName),
+        title: f.facilityName,
+      })),
+    ];
+  });
+
+  const isCarbonScopeTabActive = (item) => {
+    if (item.key === 'all') return activeCarbonScopeTab.value === 'all';
+    return activeCarbonScopeTab.value === item.key;
+  };
+
+  const onCarbonScopeTabClick = (item) => {
+    if (item.key === 'all') setActiveCarbonScopeTab('all');
+    else setActiveCarbonScopeTab(item.key);
+  };
+
   // 獲取所有開啟且有資料的圖層
   const visibleLayers = computed(() => {
     const allLayers = dataStore.getAllLayers();
@@ -197,10 +243,15 @@
   watch(
     [() => currentLayerSummary.value, () => currentLayer.value?.layerId],
     () => {
+      activeCarbonScopeTab.value = 'all';
       redrawCharts();
     },
     { immediate: true, deep: true }
   );
+
+  watch(activeCarbonScopeTab, () => {
+    nextTick(() => redrawCharts());
+  });
 
   /**
    * 🚀 組件掛載事件 (Component Mounted Event)
@@ -297,8 +348,37 @@
       <!-- 📊 事業／年度碳排圖層儀表板 -->
       <div v-if="showCarbonReportDashboard">
         <div class="row">
-          <!-- 加總（直接／間接／合計）：事業＝全公司表列加總；年度＝該年度表列加總 -->
-          <div v-if="currentLayerSummary.carbonFacilityTotals" class="col-12">
+          <!-- 多事業時：內層分頁「全部」＋廠名（事業名稱中「公司」之後；無則全名） -->
+          <div v-if="showCarbonByFacility" class="col-12">
+            <ul
+              class="nav flex-nowrap overflow-x-auto gap-1 dashboard-carbon-scope-nav mb-3 rounded-2 p-1 my-bgcolor-gray-100"
+            >
+              <li
+                v-for="item in carbonScopeTabItems"
+                :key="String(item.key)"
+                class="nav-item d-flex min-w-0"
+              >
+                <button
+                  type="button"
+                  class="btn nav-link flex-grow-1 text-nowrap min-w-0 text-truncate rounded-0 border-0 my-bgcolor-gray-200 py-2 px-2 px-md-3"
+                  :class="{ active: isCarbonScopeTabActive(item) }"
+                  :title="item.title"
+                  @click="onCarbonScopeTabClick(item)"
+                >
+                  <span class="my-content-sm-black fw-medium">{{ item.label }}</span>
+                </button>
+              </li>
+            </ul>
+          </div>
+
+          <!-- 加總（直接／間接／合計）：事業＝全公司表列加總；年度＝該年度表列加總 — 「全部」分頁，或單一面向時直接顯示 -->
+          <div
+            v-if="
+              currentLayerSummary.carbonFacilityTotals &&
+              (!showCarbonByFacility || activeCarbonScopeTab === 'all')
+            "
+            class="col-12"
+          >
             <div class="rounded-4 my-bgcolor-gray-100 p-3 mb-3">
               <div class="my-title-sm-black mb-3 d-flex flex-wrap align-items-baseline gap-2">
                 <span>排放量</span>
@@ -369,12 +449,13 @@
             </div>
           </div>
 
-          <!-- 年度趨勢與各年度排放量：同一灰底區塊；lg 以上左右並排、以下直向 -->
+          <!-- 年度趨勢與各年度排放量：「全部」分頁；單一面向且無內層分頁時同左 -->
           <div
             v-if="
               (currentLayer?.isCarbonReportBizLayer ||
                 currentLayer?.isCarbonReportIndustryLayer) &&
-              currentLayerSummary.yearlyCarbonTrend?.length
+              currentLayerSummary.yearlyCarbonTrend?.length &&
+              (!showCarbonByFacility || activeCarbonScopeTab === 'all')
             "
             class="col-12"
           >
@@ -483,16 +564,19 @@
             </div>
           </div>
 
-          <!-- 依 事業名稱 分開：排放量／趨勢／表（與上區全層合計併陳；至少兩家 事業名稱 才出現本區塊） -->
-          <div v-if="showCarbonByFacility" class="col-12">
-            <div class="my-title-sm-black mb-3">各事業</div>
-            <div class="row g-0">
-              <DashboardCarbonFacilityGroup
-                v-for="(fac, fidx) in carbonByFacilityNameList"
-                :key="fac.facilityName + '-' + fidx"
-                :facility="fac"
-              />
-            </div>
+          <!-- 各廠分頁：單一事業一頁 -->
+          <div
+            v-if="
+              showCarbonByFacility &&
+              activeCarbonScopeTab !== 'all' &&
+              currentLayerSummary.carbonByFacilityName?.[activeCarbonScopeTab]
+            "
+            class="col-12"
+          >
+            <DashboardCarbonFacilityGroup
+              :key="'sf-' + activeCarbonScopeTab"
+              :facility="currentLayerSummary.carbonByFacilityName[activeCarbonScopeTab]"
+            />
           </div>
         </div>
       </div>
@@ -571,5 +655,13 @@
 
   .dashboard-yearly-num--total {
     color: var(--my-color-orange);
+  }
+
+  .dashboard-carbon-scope-nav .nav-link {
+    box-shadow: none;
+  }
+
+  .dashboard-carbon-scope-nav .nav-link.active {
+    background-color: var(--my-color-white, #fff);
   }
 </style>
