@@ -704,7 +704,10 @@ body.my-no-select * {
 }
 
 /*
- * Dashboard 年度趨勢 D3 圖刻度：一律 my-font-size-xs（含 tspan 子節點，避免 D3/UA 變成較小字）。
+ * Dashboard 年度趨勢圖 D3 座標軸刻度（.dashboard-chart-axis-text）
+ * · 字級固定為 var(--my-font-size-xs)（與圖例 my-content-xs-gray 一致）
+ * · 子節點 tspan 一併指定，避免日後若拆段時被 tspan 覆寫字級
+ * · 若需改刻度字級，只改此處；請勿在 DashboardTab.vue 的 D3 內呼叫 .attr('font-size'…) 等
  */
 .dashboard-carbon-trend-chart svg text.dashboard-chart-axis-text,
 .dashboard-carbon-trend-chart svg text.dashboard-chart-axis-text tspan {

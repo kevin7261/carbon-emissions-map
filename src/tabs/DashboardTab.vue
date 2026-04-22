@@ -684,7 +684,7 @@
 </template>
 
 <style scoped>
-  /* 刻度樣式見 common.css：與圖例同 --my-font-size-xs */
+  /* 年度趨勢圖表座標刻度字級僅在 common.css（.dashboard-chart-axis-text），勿在此或 D3 內寫死 fontSize */
 
   :deep(svg .dashboard-chart-hover-line) {
     stroke: var(--my-color-gray-500);
