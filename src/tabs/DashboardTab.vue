@@ -178,7 +178,7 @@
       .attr('y', (d) => yScale(d))
       .attr('dy', '0.35em')
       .attr('text-anchor', 'end')
-      .text((d) => d3.format('.2s')(d));
+      .text((d) => (d === 0 ? '0' : d3.format('.2s')(d)));
 
     const focus = g
       .append('g')
@@ -196,10 +196,10 @@
       focus
         .append('circle')
         .attr('class', 'dashboard-chart-focus-dot')
-        .attr('r', 4)
+        .attr('r', 2.5)
         .attr('fill', '#fff')
         .attr('stroke', s.color)
-        .attr('stroke-width', 2)
+        .attr('stroke-width', 1.5)
     );
 
     /** 繪圖區寬度均分：每個年度佔相同 hover 帶寬，垂線仍對齊該年度資料點 */
@@ -472,7 +472,7 @@
             class="col-12"
           >
             <div class="rounded-4 my-bgcolor-gray-100 p-3 mb-3">
-              <div class="my-title-sm-black mb-2">年度趨勢</div>
+              <div class="my-title-sm-black mb-3">年度趨勢</div>
               <div class="dashboard-carbon-trend-stack d-flex flex-column gap-2">
                 <div ref="carbonTrendChartRef" class="dashboard-carbon-trend-chart w-100"></div>
                 <div
@@ -531,7 +531,7 @@
                 </div>
               </div>
               <div class="mt-4 pt-3 border-top border-secondary border-opacity-25">
-                <div class="my-title-sm-black mb-2 d-flex flex-wrap align-items-baseline gap-2">
+                <div class="my-title-sm-black mb-3 d-flex flex-wrap align-items-baseline gap-2">
                   <span>各年度排放量</span>
                   <span class="my-content-xs-gray fw-normal">(公噸 CO₂e)</span>
                 </div>
