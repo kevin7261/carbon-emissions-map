@@ -52,13 +52,12 @@
   });
 
   /**
-   * 圖層清單「事業」群（單一統編層內有兩種以上 事業名稱 時顯示）；行業分類圖層同樣有彙總則併陳
+   * 僅「事業」圖層、且兩家以上 事業名稱 時，顯示內層 全部/各廠 分頁。行業分類／年度 與歷層合計一樣不拆廠
    */
   const showCarbonByFacility = computed(() => {
     const l = currentLayer.value;
     const list = currentLayerSummary.value?.carbonByFacilityName;
-    if (!l || !list?.length) return false;
-    if (!l.isCarbonReportBizLayer && !l.isCarbonReportIndustryLayer) return false;
+    if (!l || !l.isCarbonReportBizLayer || !list?.length) return false;
     return list.length > 1;
   });
 
@@ -78,9 +77,20 @@
   };
 
   /**
-   * 內層分頁標籤：取「事業名稱」內第一個「公司」**之後**的字（廠名習慣在後段）；沒有「公司」則用全名
-   * @param {string} [facilityName]
+   * 從字首到第一個「公司」**為止，且含「公司」兩字**；其後之廠名等不顯示。無「公司」則回傳整段 trim 後字串。
+   * @param {string} [name]
    * @returns {string}
+   */
+  const nameThroughFirstGongsi = (name) => {
+    const s = String(name ?? '').trim();
+    if (!s) return '—';
+    const i = s.indexOf('公司');
+    if (i < 0) return s;
+    return s.slice(0, i + 2);
+  };
+
+  /**
+   * 內層分頁文字：第一個「公司」**之後**的廠名（與主標題「至公司含兩字」分開，tab 維持廠名寫法）
    */
   const labelAfterGongsi = (facilityName) => {
     const s = String(facilityName ?? '').trim();
@@ -154,6 +164,21 @@
     if (!activeLayerTab.value) return '無開啟圖層';
     const layer = visibleLayers.value.find((l) => l.layerId === activeLayerTab.value);
     return layer ? layer.layerName || '未知圖層' : '無開啟圖層';
+  });
+
+  /**
+   * 主標題：事業圖層以「事業名稱」截到**含第一處「公司」**；其餘同圖層名
+   */
+  const dashboardMainTitle = computed(() => {
+    const layer = currentLayer.value;
+    if (!layer) return currentLayerName.value;
+    if (layer.isCarbonReportBizLayer && Array.isArray(layer.tableData) && layer.tableData.length) {
+      for (const row of layer.tableData) {
+        const full = String(row['事業名稱'] ?? '').trim();
+        if (full) return nameThroughFirstGongsi(full);
+      }
+    }
+    return currentLayerName.value;
   });
 
   /** 事業或年度碳排圖層：顯示與資料表一致之加總；事業另顯多年度趨勢折線 */
@@ -342,33 +367,42 @@
     <div v-if="visibleLayers.length > 0" class="flex-grow-1 overflow-auto my-bgcolor-white p-3">
       <!-- 📊 當前圖層資訊 -->
       <div class="mb-3">
-        <div class="my-title-xl-black">{{ currentLayerName }}</div>
+        <div class="my-title-xl-black text-break">{{ dashboardMainTitle }}</div>
       </div>
 
       <!-- 📊 事業／年度碳排圖層儀表板 -->
       <div v-if="showCarbonReportDashboard">
         <div class="row">
-          <!-- 多事業時：內層分頁「全部」＋廠名（事業名稱中「公司」之後；無則全名） -->
+          <!-- 多事業時：內層分頁「全部」＋廠名（公司後字；主標題另用至含「公司」） -->
           <div v-if="showCarbonByFacility" class="col-12">
-            <ul
-              class="nav flex-nowrap overflow-x-auto gap-1 dashboard-carbon-scope-nav mb-3 rounded-2 p-1 my-bgcolor-gray-100"
+            <div
+              class="dashboard-carbon-scope-rail mb-3"
+              role="tablist"
+              aria-label="合計與各廠"
             >
-              <li
-                v-for="item in carbonScopeTabItems"
-                :key="String(item.key)"
-                class="nav-item d-flex min-w-0"
-              >
-                <button
-                  type="button"
-                  class="btn nav-link flex-grow-1 text-nowrap min-w-0 text-truncate rounded-0 border-0 my-bgcolor-gray-200 py-2 px-2 px-md-3"
-                  :class="{ active: isCarbonScopeTabActive(item) }"
-                  :title="item.title"
-                  @click="onCarbonScopeTabClick(item)"
+              <ul class="dashboard-carbon-scope-nav">
+                <li
+                  v-for="item in carbonScopeTabItems"
+                  :key="String(item.key)"
+                  class="dashboard-carbon-scope-item"
                 >
-                  <span class="my-content-sm-black fw-medium">{{ item.label }}</span>
-                </button>
-              </li>
-            </ul>
+                  <button
+                    type="button"
+                    class="dashboard-carbon-scope-tab"
+                    :class="{
+                      'dashboard-carbon-scope-tab--active': isCarbonScopeTabActive(item),
+                      'dashboard-carbon-scope-tab--all': item.key === 'all',
+                    }"
+                    role="tab"
+                    :aria-selected="isCarbonScopeTabActive(item)"
+                    :title="item.title"
+                    @click="onCarbonScopeTabClick(item)"
+                  >
+                    <span class="dashboard-carbon-scope-tab__text">{{ item.label }}</span>
+                  </button>
+                </li>
+              </ul>
+            </div>
           </div>
 
           <!-- 加總（直接／間接／合計）：事業＝全公司表列加總；年度＝該年度表列加總 — 「全部」分頁，或單一面向時直接顯示 -->
@@ -657,11 +691,77 @@
     color: var(--my-color-orange);
   }
 
-  .dashboard-carbon-scope-nav .nav-link {
-    box-shadow: none;
+  /* 合計 / 各廠：深底、白字 */
+  .dashboard-carbon-scope-rail {
+    position: relative;
+    padding: 0.4rem 0.5rem;
+    border: none;
+    border-radius: 0.75rem;
+    background: var(--my-color-gray-800);
   }
 
-  .dashboard-carbon-scope-nav .nav-link.active {
-    background-color: var(--my-color-white, #fff);
+  .dashboard-carbon-scope-nav {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: stretch;
+    gap: 0.35rem;
+    margin: 0;
+    padding: 0 0.1rem;
+    list-style: none;
+  }
+
+  .dashboard-carbon-scope-item {
+    flex: 0 0 auto;
+    min-width: 0;
+    max-width: 14rem;
+  }
+
+  .dashboard-carbon-scope-tab {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    min-height: 2.35rem;
+    padding: 0.4rem 0.9rem;
+    border: none;
+    border-radius: 0.5rem;
+    background: transparent;
+    color: rgba(255, 255, 255, 0.88);
+    font-size: var(--my-font-size-sm);
+    font-weight: var(--my-font-weight-md);
+    line-height: 1.3;
+    transition: color 0.16s ease, background 0.16s ease;
+  }
+
+  .dashboard-carbon-scope-tab:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: #fff;
+  }
+
+  .dashboard-carbon-scope-tab:focus-visible {
+    outline: 2px solid rgba(255, 255, 255, 0.5);
+    outline-offset: 2px;
+  }
+
+  .dashboard-carbon-scope-tab--all:not(.dashboard-carbon-scope-tab--active) {
+    font-weight: var(--my-font-weight-lg);
+    color: #fff;
+  }
+
+  .dashboard-carbon-scope-tab--active {
+    background: var(--my-color-white);
+    color: var(--my-color-gray-900);
+    font-weight: var(--my-font-weight-lg);
+  }
+
+  .dashboard-carbon-scope-tab__text {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 100%;
+  }
+
+  .dashboard-carbon-scope-tab--active:focus-visible {
+    outline-color: var(--my-color-gray-600);
   }
 </style>

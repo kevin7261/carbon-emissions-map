@@ -60,6 +60,16 @@ export function drawCarbonTrendLineChart(containerEl, trend) {
 
   const yScale = d3.scaleLinear().domain([0, yMax]).range([height, 0]);
 
+  /**
+   * 左軸：SI 簡寫（k/M…），與舊版 `.2s` 精神相同但係數不帶小數（`.0s`）
+   */
+  const yAxisFormatSi = d3.format('.0s');
+  const formatYAxisLabel = (d) => {
+    if (d === 0) return '0';
+    if (typeof d !== 'number' || !Number.isFinite(d)) return '';
+    return yAxisFormatSi(d).replace(/k$/, 'K');
+  };
+
   const line = (key) =>
     d3
       .line()
@@ -118,5 +128,5 @@ export function drawCarbonTrendLineChart(containerEl, trend) {
     .attr('y', (d) => yScale(d))
     .attr('dy', '0.35em')
     .attr('text-anchor', 'end')
-    .text((d) => (d === 0 ? '0' : d3.format('.2s')(d)));
+    .text((d) => formatYAxisLabel(d));
 }

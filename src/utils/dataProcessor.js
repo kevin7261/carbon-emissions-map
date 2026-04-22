@@ -2170,7 +2170,8 @@ export function buildCarbonReportPayloadFromRows(layer, meta, rows) {
   };
 
   /**
-   * 事業（依統編）或行業分類圖層：儀表板加總與年度趨勢與資料表同一來源（本函式產出之 tableData 逐列加總）。
+   * 事業（依統編）或行業分類圖層：儀表板加總與多年度趨勢與資料表同一來源（本函式產出之 tableData 逐列加總）。
+   * 依事業名稱分組（`carbonByFacilityName`）僅事業圖層需要；行業分類同年度圖層僅用全層合計＋歷年趨勢，不拆廠。
    */
   if (layer.isCarbonReportBizLayer || layer.isCarbonReportIndustryLayer) {
     const kDirect = '直接排放量(公噸CO2e)';
@@ -2178,7 +2179,7 @@ export function buildCarbonReportPayloadFromRows(layer, meta, rows) {
     const kTotal = '合計排放量(公噸CO2e)';
 
     const byYear = Object.create(null);
-    const byFac = new Map();
+    const byFac = layer.isCarbonReportBizLayer ? new Map() : null;
     let sumDirect = 0;
     let sumIndirect = 0;
     let sumTotal = 0;
@@ -2199,25 +2200,27 @@ export function buildCarbonReportPayloadFromRows(layer, meta, rows) {
         if (Number.isFinite(tv)) byYear[y].total += tv;
       }
 
-      const fn = String(row['事業名稱'] ?? '').trim() || '（未填）';
-      if (!byFac.has(fn)) {
-        byFac.set(fn, {
-          byYear: Object.create(null),
-          sumDirect: 0,
-          sumIndirect: 0,
-          sumTotal: 0,
-        });
+      if (byFac) {
+        const fn = String(row['事業名稱'] ?? '').trim() || '（未填）';
+        if (!byFac.has(fn)) {
+          byFac.set(fn, {
+            byYear: Object.create(null),
+            sumDirect: 0,
+            sumIndirect: 0,
+            sumTotal: 0,
+          });
+        }
+        const fac = byFac.get(fn);
+        if (y) {
+          if (!fac.byYear[y]) fac.byYear[y] = { year: y, direct: 0, indirect: 0, total: 0 };
+          if (Number.isFinite(d)) fac.byYear[y].direct += d;
+          if (Number.isFinite(indv)) fac.byYear[y].indirect += indv;
+          if (Number.isFinite(tv)) fac.byYear[y].total += tv;
+        }
+        fac.sumDirect += fd;
+        fac.sumIndirect += fi;
+        fac.sumTotal += ft;
       }
-      const fac = byFac.get(fn);
-      if (y) {
-        if (!fac.byYear[y]) fac.byYear[y] = { year: y, direct: 0, indirect: 0, total: 0 };
-        if (Number.isFinite(d)) fac.byYear[y].direct += d;
-        if (Number.isFinite(indv)) fac.byYear[y].indirect += indv;
-        if (Number.isFinite(tv)) fac.byYear[y].total += tv;
-      }
-      fac.sumDirect += fd;
-      fac.sumIndirect += fi;
-      fac.sumTotal += ft;
 
       sumDirect += fd;
       sumIndirect += fi;
@@ -2232,21 +2235,23 @@ export function buildCarbonReportPayloadFromRows(layer, meta, rows) {
       indirect: sumIndirect,
       total: sumTotal,
     };
-    const facNames = [...byFac.keys()].sort(compareCarbonReportIndustryNameStrokeOrder);
-    summaryData.carbonByFacilityName = facNames.map((facilityName) => {
-      const fac = byFac.get(facilityName);
-      return {
-        facilityName,
-        carbonFacilityTotals: {
-          direct: fac.sumDirect,
-          indirect: fac.sumIndirect,
-          total: fac.sumTotal,
-        },
-        yearlyCarbonTrend: Object.values(fac.byYear).sort(
-          (a, b) => Number(a.year) - Number(b.year)
-        ),
-      };
-    });
+    if (byFac) {
+      const facNames = [...byFac.keys()].sort(compareCarbonReportIndustryNameStrokeOrder);
+      summaryData.carbonByFacilityName = facNames.map((facilityName) => {
+        const fac = byFac.get(facilityName);
+        return {
+          facilityName,
+          carbonFacilityTotals: {
+            direct: fac.sumDirect,
+            indirect: fac.sumIndirect,
+            total: fac.sumTotal,
+          },
+          yearlyCarbonTrend: Object.values(fac.byYear).sort(
+            (a, b) => Number(a.year) - Number(b.year)
+          ),
+        };
+      });
+    }
   }
 
   /**

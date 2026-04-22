@@ -93,7 +93,6 @@
 
 <template>
   <div class="dashboard-carbon-facility-group col-12">
-    <div class="my-title-sm-black mb-2">{{ facility.facilityName }}</div>
     <div
       v-if="facility.carbonFacilityTotals"
       class="rounded-4 my-bgcolor-gray-100 p-3 mb-3"
