@@ -8,8 +8,6 @@
 
   const activeLayerTab = ref(null); /** 📑 當前作用中的圖層分頁 */
   const carbonTrendChartRef = ref(null); /** 📊 事業年度碳排折線圖 */
-  /** 折線圖 hover：數值顯示於圖例欄（與圖例同 my-content-xs-gray） */
-  const carbonTrendHoverRow = ref(null);
 
   const currentLayer = computed(() => {
     if (!activeLayerTab.value) return null;
@@ -117,7 +115,6 @@
   };
 
   const drawCarbonTrendLineChart = (trend) => {
-    carbonTrendHoverRow.value = null;
     if (!carbonTrendChartRef.value || !trend || trend.length === 0) {
       return;
     }
@@ -128,8 +125,18 @@
     const el = carbonTrendChartRef.value;
     const baseW = measureCarbonTrendChartWidth(el);
     const width = Math.max(120, baseW - margin.left - margin.right);
-    const height = 150;
-    const totalH = height + margin.top + margin.bottom;
+    /** 與右欄表格同高：依圖表容器；viewBox 高須等於實際 clientHeight，否則 meet 會左右留白 */
+    const PLOT_FALLBACK = 150;
+    const ch = el?.clientHeight ?? 0;
+    let height;
+    let totalH;
+    if (ch > 40) {
+      totalH = ch;
+      height = Math.max(1, ch - margin.top - margin.bottom);
+    } else {
+      height = PLOT_FALLBACK;
+      totalH = height + margin.top + margin.bottom;
+    }
     const years = trend.map((d) => String(d.year));
 
     const maxVal = d3.max(trend, (d) => Math.max(d.direct || 0, d.indirect || 0, d.total || 0)) || 0;
@@ -139,9 +146,11 @@
       .select(el)
       .append('svg')
       .attr('viewBox', `0 0 ${baseW} ${totalH}`)
-      .attr('preserveAspectRatio', 'xMidYMid meet')
+      .attr('preserveAspectRatio', 'xMinYMin meet')
       .attr('width', '100%')
+      .attr('height', '100%')
       .style('display', 'block')
+      .style('min-height', '0')
       .style('max-width', '100%');
 
     const g = svg.append('g').attr('transform', `translate(${margin.left},${margin.top})`);
@@ -200,7 +209,7 @@
       .attr('y', 0)
       .attr('dy', '1.05em')
       .attr('text-anchor', 'middle')
-      .text((y) => `${y}年`);
+      .text((y) => String(y));
 
     g.append('g')
       .selectAll('text-y')
@@ -213,72 +222,6 @@
       .attr('dy', '0.35em')
       .attr('text-anchor', 'end')
       .text((d) => (d === 0 ? '0' : d3.format('.2s')(d)));
-
-    const focus = g
-      .append('g')
-      .attr('class', 'dashboard-chart-focus')
-      .style('opacity', 0)
-      .style('pointer-events', 'none');
-
-    const hoverLine = focus
-      .append('line')
-      .attr('class', 'dashboard-chart-hover-line')
-      .attr('y1', 0)
-      .attr('y2', height);
-
-    const focusDots = series.map((s) =>
-      focus
-        .append('circle')
-        .attr('class', 'dashboard-chart-focus-dot')
-        .attr('r', 2.5)
-        .attr('fill', '#fff')
-        .attr('stroke', s.color)
-        .attr('stroke-width', 1.5)
-    );
-
-    /** 繪圖區寬度均分：每個年度佔相同 hover 帶寬，垂線仍對齊該年度資料點 */
-    const yearFromMxEqualBands = (mx) => {
-      if (!years.length) return years[0];
-      const w = Math.max(1e-6, width);
-      const clamped = Math.max(0, Math.min(w, mx));
-      const idx = Math.min(years.length - 1, Math.floor((clamped / w) * years.length));
-      return years[idx];
-    };
-
-    const showHover = (yearStr) => {
-      const row = trend.find((t) => String(t.year) === yearStr);
-      if (!row) return;
-      const lx = xScale(yearStr);
-      hoverLine.attr('x1', lx).attr('x2', lx);
-
-      const cys = series.map((s) => yScale(row[s.key] ?? 0));
-      series.forEach((s, i) => {
-        focusDots[i].attr('cx', lx).attr('cy', cys[i]);
-      });
-
-      carbonTrendHoverRow.value = {
-        year: yearStr,
-        direct: row.direct,
-        indirect: row.indirect,
-        total: row.total,
-      };
-
-      focus.style('opacity', 1);
-    };
-
-    g.append('rect')
-      .attr('width', width)
-      .attr('height', height)
-      .attr('fill', 'transparent')
-      .style('cursor', 'crosshair')
-      .on('mousemove', function (event) {
-        const [mx] = d3.pointer(event, this);
-        showHover(yearFromMxEqualBands(mx));
-      })
-      .on('mouseleave', () => {
-        focus.style('opacity', 0);
-        carbonTrendHoverRow.value = null;
-      });
   };
 
   /** 依目前圖層重繪統計圖 */
@@ -304,7 +247,6 @@
       });
     } else if (carbonTrendChartRef.value) {
       d3.select(carbonTrendChartRef.value).selectAll('*').remove();
-      carbonTrendHoverRow.value = null;
     }
   };
 
@@ -365,27 +307,51 @@
   /**
    * 🚀 組件掛載事件 (Component Mounted Event)
    */
-  onMounted(() => {
-    console.log('[DashboardTab] Component Mounted');
-
-    // 初始化第一個可見圖層為作用中分頁
-    if (visibleLayers.value.length > 0 && !activeLayerTab.value) {
-      activeLayerTab.value = visibleLayers.value[0].layerId;
-    }
-  });
-
-  // 監聽窗口大小變化，重新繪製圖表
+  // 監聽窗口與圖表容器變化，重新繪製（與左欄滿高 flex 聯動）
   const handleResize = () => {
     redrawCharts();
   };
 
+  let carbonChartResizeObserver = null;
+  let chartResizeRaf = null;
+
+  watch(
+    () => carbonTrendChartRef.value,
+    (chartEl) => {
+      if (carbonChartResizeObserver) {
+        carbonChartResizeObserver.disconnect();
+        carbonChartResizeObserver = null;
+      }
+      if (chartEl && typeof ResizeObserver !== 'undefined') {
+        carbonChartResizeObserver = new ResizeObserver(() => {
+          if (chartResizeRaf) cancelAnimationFrame(chartResizeRaf);
+          chartResizeRaf = requestAnimationFrame(() => {
+            chartResizeRaf = null;
+            const s = currentLayerSummary.value;
+            if (s?.yearlyCarbonTrend?.length) {
+              drawCarbonTrendLineChart(s.yearlyCarbonTrend);
+            }
+          });
+        });
+        carbonChartResizeObserver.observe(chartEl);
+      }
+    }
+  );
+
   onMounted(() => {
+    console.log('[DashboardTab] Component Mounted');
+    if (visibleLayers.value.length > 0 && !activeLayerTab.value) {
+      activeLayerTab.value = visibleLayers.value[0].layerId;
+    }
     window.addEventListener('resize', handleResize);
   });
 
-  // 組件卸載時移除事件監聽
   onUnmounted(() => {
     window.removeEventListener('resize', handleResize);
+    if (chartResizeRaf) cancelAnimationFrame(chartResizeRaf);
+    if (carbonChartResizeObserver) {
+      carbonChartResizeObserver.disconnect();
+    }
   });
 </script>
 
@@ -505,7 +471,7 @@
             </div>
           </div>
 
-          <!-- 年度趨勢（事業：該統編多年度；行業分類：該行業彙總多年度） -->
+          <!-- 年度趨勢與各年度排放量：同一灰底區塊；lg 以上左右並排、以下直向 -->
           <div
             v-if="
               (currentLayer?.isCarbonReportBizLayer ||
@@ -514,155 +480,106 @@
             "
             class="col-12"
           >
-            <div class="rounded-4 my-bgcolor-gray-100 p-3 mb-3">
-              <div class="my-title-sm-black mb-3">年度趨勢</div>
-              <div class="dashboard-carbon-trend-stack d-flex flex-column gap-2">
-                <div ref="carbonTrendChartRef" class="dashboard-carbon-trend-chart w-100"></div>
+            <div
+              class="rounded-4 my-bgcolor-gray-100 p-3 mb-3 d-flex flex-column min-h-0 min-w-0"
+            >
+              <div
+                class="row g-3 g-lg-4 align-items-stretch flex-grow-1 min-h-0"
+              >
                 <div
-                  class="dashboard-carbon-trend-legend-panel rounded-3 my-bgcolor-white px-3 py-2"
+                  class="col-12 col-lg-6 d-flex min-h-0 min-w-0 h-lg-100"
                 >
                   <div
-                    class="d-flex flex-wrap align-items-center justify-content-center gap-2 gap-md-3 my-content-xs-gray"
+                    class="d-flex flex-column flex-grow-1 w-100 min-w-0 min-h-0 h-lg-100"
                   >
-                    <div v-if="carbonTrendHoverRow" class="text-nowrap flex-shrink-0">
-                      {{ carbonTrendHoverRow.year }}年
-                    </div>
+                    <div class="my-title-sm-black mb-3 flex-shrink-0">年度趨勢</div>
                     <div
-                      class="d-flex flex-wrap align-items-baseline justify-content-center gap-2 gap-md-3"
+                      class="dashboard-carbon-trend-stack d-flex flex-column flex-grow-1 min-h-0 w-100 min-w-0"
                     >
-                      <span class="d-inline-flex align-items-center gap-2 text-nowrap">
-                        <span
-                          class="dashboard-carbon-legend-line flex-shrink-0"
-                          style="background: var(--my-color-green)"
-                        ></span>
-                        <span>直接</span>
-                        <template v-if="carbonTrendHoverRow">
-                          <span class="tabular-nums">
-                            <template
-                              v-for="p in [formatCarbonTonsParts(carbonTrendHoverRow.direct)]"
-                              :key="'h-d-' + p.main + (p.frac ?? '')"
-                            >
-                              <template v-if="p.frac"
-                                >{{ p.main }}<small>{{ p.frac }}</small></template
-                              >
-                              <template v-else>{{ p.main }}</template>
-                            </template>
-                          </span>
-                          <span class="fw-normal">公噸 CO₂e</span>
-                        </template>
-                      </span>
-                      <span class="d-inline-flex align-items-center gap-2 text-nowrap">
-                        <span
-                          class="dashboard-carbon-legend-line flex-shrink-0"
-                          style="background: var(--my-color-blue)"
-                        ></span>
-                        <span>能源間接</span>
-                        <template v-if="carbonTrendHoverRow">
-                          <span class="tabular-nums">
-                            <template
-                              v-for="p in [formatCarbonTonsParts(carbonTrendHoverRow.indirect)]"
-                              :key="'h-i-' + p.main + (p.frac ?? '')"
-                            >
-                              <template v-if="p.frac"
-                                >{{ p.main }}<small>{{ p.frac }}</small></template
-                              >
-                              <template v-else>{{ p.main }}</template>
-                            </template>
-                          </span>
-                          <span class="fw-normal">公噸 CO₂e</span>
-                        </template>
-                      </span>
-                      <span class="d-inline-flex align-items-center gap-2 text-nowrap">
-                        <span
-                          class="dashboard-carbon-legend-line flex-shrink-0"
-                          style="background: var(--my-color-orange)"
-                        ></span>
-                        <span>合計</span>
-                        <template v-if="carbonTrendHoverRow">
-                          <span class="tabular-nums">
-                            <template
-                              v-for="p in [formatCarbonTonsParts(carbonTrendHoverRow.total)]"
-                              :key="'h-t-' + p.main + (p.frac ?? '')"
-                            >
-                              <template v-if="p.frac"
-                                >{{ p.main }}<small>{{ p.frac }}</small></template
-                              >
-                              <template v-else>{{ p.main }}</template>
-                            </template>
-                          </span>
-                          <span class="fw-normal">公噸 CO₂e</span>
-                        </template>
-                      </span>
+                      <div
+                        ref="carbonTrendChartRef"
+                        class="dashboard-carbon-trend-chart dashboard-carbon-trend-chart--plot w-100 h-100 flex-grow-1 min-h-0"
+                      ></div>
                     </div>
                   </div>
                 </div>
-              </div>
-              <div class="mt-4 pt-3 border-top border-secondary border-opacity-25">
-                <div class="my-title-sm-black mb-3 d-flex flex-wrap align-items-baseline gap-2">
-                  <span>各年度排放量</span>
-                  <span class="my-content-xs-gray fw-normal">(公噸 CO₂e)</span>
-                </div>
-                <div class="table-responsive rounded-3 overflow-hidden my-bgcolor-white">
-                  <table class="table table-sm mb-0 dashboard-yearly-emissions-table">
-                    <thead>
-                      <tr class="my-content-xs-gray">
-                        <th class="text-start ps-3 py-2 fw-normal border-0">年度</th>
-                        <th class="text-end py-2 fw-normal border-0">直接</th>
-                        <th class="text-end py-2 fw-normal border-0">能源間接</th>
-                        <th class="text-end pe-3 py-2 fw-normal border-0">合計</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      <tr
-                        v-for="row in currentLayerSummary.yearlyCarbonTrend"
-                        :key="row.year"
-                        class="border-bottom border-secondary border-opacity-10"
-                      >
-                        <td class="text-start ps-3 py-2 align-middle my-content-sm-black">
-                          {{ row.year }}
-                        </td>
-                        <td
-                          class="text-end py-2 align-middle dashboard-yearly-num dashboard-yearly-num--direct"
-                        >
-                          <template
-                            v-for="p in [formatCarbonTonsPartsYearlyTable(row.direct)]"
-                            :key="row.year + 'd' + p.main + (p.frac ?? '')"
+                <div
+                  class="col-12 col-lg-6 d-flex min-w-0 min-h-0 h-lg-100"
+                >
+                  <div
+                    class="d-flex flex-column flex-grow-1 w-100 h-100 min-h-0"
+                  >
+                    <div
+                      class="my-title-sm-black mb-3 d-flex flex-wrap align-items-baseline gap-2 flex-shrink-0"
+                    >
+                      <span>各年度排放量</span>
+                      <span class="my-content-xs-gray fw-normal">(公噸 CO₂e)</span>
+                    </div>
+                    <div
+                      class="table-responsive rounded-3 overflow-hidden my-bgcolor-white flex-grow-1"
+                    >
+                      <table class="table table-sm mb-0 dashboard-yearly-emissions-table">
+                        <thead>
+                          <tr class="my-content-xs-gray">
+                            <th class="text-start ps-3 py-2 fw-normal border-0">年度</th>
+                            <th class="text-end py-2 fw-normal border-0">直接</th>
+                            <th class="text-end py-2 fw-normal border-0">能源間接</th>
+                            <th class="text-end pe-3 py-2 fw-normal border-0">合計</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <tr
+                            v-for="row in currentLayerSummary.yearlyCarbonTrend"
+                            :key="row.year"
+                            class="border-bottom border-secondary border-opacity-10"
                           >
-                            <template v-if="p.frac"
-                              >{{ p.main }}<small>{{ p.frac }}</small></template
+                            <td class="text-start ps-3 py-2 align-middle my-content-sm-black">
+                              {{ row.year }}
+                            </td>
+                            <td
+                              class="text-end py-2 align-middle dashboard-yearly-num dashboard-yearly-num--direct"
                             >
-                            <template v-else>{{ p.main }}</template>
-                          </template>
-                        </td>
-                        <td
-                          class="text-end py-2 align-middle dashboard-yearly-num dashboard-yearly-num--indirect"
-                        >
-                          <template
-                            v-for="p in [formatCarbonTonsPartsYearlyTable(row.indirect)]"
-                            :key="row.year + 'i' + p.main + (p.frac ?? '')"
-                          >
-                            <template v-if="p.frac"
-                              >{{ p.main }}<small>{{ p.frac }}</small></template
+                              <template
+                                v-for="p in [formatCarbonTonsPartsYearlyTable(row.direct)]"
+                                :key="row.year + 'd' + p.main + (p.frac ?? '')"
+                              >
+                                <template v-if="p.frac"
+                                  >{{ p.main }}<small>{{ p.frac }}</small></template
+                                >
+                                <template v-else>{{ p.main }}</template>
+                              </template>
+                            </td>
+                            <td
+                              class="text-end py-2 align-middle dashboard-yearly-num dashboard-yearly-num--indirect"
                             >
-                            <template v-else>{{ p.main }}</template>
-                          </template>
-                        </td>
-                        <td
-                          class="text-end pe-3 py-2 align-middle dashboard-yearly-num dashboard-yearly-num--total"
-                        >
-                          <template
-                            v-for="p in [formatCarbonTonsPartsYearlyTable(row.total)]"
-                            :key="row.year + 't' + p.main + (p.frac ?? '')"
-                          >
-                            <template v-if="p.frac"
-                              >{{ p.main }}<small>{{ p.frac }}</small></template
+                              <template
+                                v-for="p in [formatCarbonTonsPartsYearlyTable(row.indirect)]"
+                                :key="row.year + 'i' + p.main + (p.frac ?? '')"
+                              >
+                                <template v-if="p.frac"
+                                  >{{ p.main }}<small>{{ p.frac }}</small></template
+                                >
+                                <template v-else>{{ p.main }}</template>
+                              </template>
+                            </td>
+                            <td
+                              class="text-end pe-3 py-2 align-middle dashboard-yearly-num dashboard-yearly-num--total"
                             >
-                            <template v-else>{{ p.main }}</template>
-                          </template>
-                        </td>
-                      </tr>
-                    </tbody>
-                  </table>
+                              <template
+                                v-for="p in [formatCarbonTonsPartsYearlyTable(row.total)]"
+                                :key="row.year + 't' + p.main + (p.frac ?? '')"
+                              >
+                                <template v-if="p.frac"
+                                  >{{ p.main }}<small>{{ p.frac }}</small></template
+                                >
+                                <template v-else>{{ p.main }}</template>
+                              </template>
+                            </td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -686,26 +603,16 @@
 <style scoped>
   /* 年度趨勢圖表座標刻度字級僅在 common.css（.dashboard-chart-axis-text），勿在此或 D3 內寫死 fontSize */
 
-  :deep(svg .dashboard-chart-hover-line) {
-    stroke: var(--my-color-gray-500);
-    stroke-width: 1;
-    stroke-dasharray: 4 3;
-  }
-
   .dashboard-carbon-trend-chart {
     width: 100%;
     min-width: 100%;
   }
 
-  .dashboard-carbon-trend-legend-panel {
-    border: 1px solid var(--my-color-gray-200);
-  }
-
-  .dashboard-carbon-legend-line {
-    display: inline-block;
-    width: 20px;
-    height: 3px;
-    border-radius: 1px;
+  /* 與右欄表格同列等高：佔滿灰底區塊內剩餘高度，供 D3 讀取 clientHeight */
+  .dashboard-carbon-trend-chart--plot {
+    flex: 1 1 0;
+    min-height: 10rem;
+    overflow: hidden;
   }
 
   /* 「排放量」三欄與「年度趨勢」折線：直接綠、能源間接藍、合計橘 */
