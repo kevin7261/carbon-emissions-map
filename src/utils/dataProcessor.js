@@ -2178,6 +2178,7 @@ export function buildCarbonReportPayloadFromRows(layer, meta, rows) {
     const kTotal = '合計排放量(公噸CO2e)';
 
     const byYear = Object.create(null);
+    const byFac = new Map();
     let sumDirect = 0;
     let sumIndirect = 0;
     let sumTotal = 0;
@@ -2198,6 +2199,26 @@ export function buildCarbonReportPayloadFromRows(layer, meta, rows) {
         if (Number.isFinite(tv)) byYear[y].total += tv;
       }
 
+      const fn = String(row['事業名稱'] ?? '').trim() || '（未填）';
+      if (!byFac.has(fn)) {
+        byFac.set(fn, {
+          byYear: Object.create(null),
+          sumDirect: 0,
+          sumIndirect: 0,
+          sumTotal: 0,
+        });
+      }
+      const fac = byFac.get(fn);
+      if (y) {
+        if (!fac.byYear[y]) fac.byYear[y] = { year: y, direct: 0, indirect: 0, total: 0 };
+        if (Number.isFinite(d)) fac.byYear[y].direct += d;
+        if (Number.isFinite(indv)) fac.byYear[y].indirect += indv;
+        if (Number.isFinite(tv)) fac.byYear[y].total += tv;
+      }
+      fac.sumDirect += fd;
+      fac.sumIndirect += fi;
+      fac.sumTotal += ft;
+
       sumDirect += fd;
       sumIndirect += fi;
       sumTotal += ft;
@@ -2211,6 +2232,21 @@ export function buildCarbonReportPayloadFromRows(layer, meta, rows) {
       indirect: sumIndirect,
       total: sumTotal,
     };
+    const facNames = [...byFac.keys()].sort(compareCarbonReportIndustryNameStrokeOrder);
+    summaryData.carbonByFacilityName = facNames.map((facilityName) => {
+      const fac = byFac.get(facilityName);
+      return {
+        facilityName,
+        carbonFacilityTotals: {
+          direct: fac.sumDirect,
+          indirect: fac.sumIndirect,
+          total: fac.sumTotal,
+        },
+        yearlyCarbonTrend: Object.values(fac.byYear).sort(
+          (a, b) => Number(a.year) - Number(b.year)
+        ),
+      };
+    });
   }
 
   /**

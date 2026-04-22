@@ -2,7 +2,9 @@
   import { ref, computed, watch, onMounted, nextTick, onUnmounted } from 'vue';
   import { useDataStore } from '@/stores/dataStore.js';
   import { splitFormattedNumberForFractionXs } from '@/utils/numberDisplay.js';
+  import { drawCarbonTrendLineChart } from '@/utils/carbonDashboardTrendChart.js';
   import * as d3 from 'd3';
+  import DashboardCarbonFacilityGroup from './DashboardCarbonFacilityGroup.vue';
 
   const dataStore = useDataStore();
 
@@ -47,6 +49,22 @@
       indirect: formatCarbonTonsParts(t.indirect),
       total: formatCarbonTonsParts(t.total),
     };
+  });
+
+  /**
+   * 圖層清單「事業」群（單一統編層內有兩種以上 事業名稱 時顯示）；行業分類圖層同樣有彙總則併陳
+   */
+  const showCarbonByFacility = computed(() => {
+    const l = currentLayer.value;
+    const list = currentLayerSummary.value?.carbonByFacilityName;
+    if (!l || !list?.length) return false;
+    if (!l.isCarbonReportBizLayer && !l.isCarbonReportIndustryLayer) return false;
+    return list.length > 1;
+  });
+
+  const carbonByFacilityNameList = computed(() => {
+    if (!showCarbonByFacility.value) return [];
+    return currentLayerSummary.value.carbonByFacilityName ?? [];
   });
 
   // 獲取所有開啟且有資料的圖層
@@ -103,126 +121,6 @@
     );
   });
 
-  /**
-   * 直接／間接／合計排放量之年度趨勢（多序列折線）
-   * @param {Array<{ year: string, direct: number, indirect: number, total: number }>} trend
-   */
-  const measureCarbonTrendChartWidth = (el) => {
-    let w = el.clientWidth;
-    if (w <= 0) w = el.getBoundingClientRect().width;
-    if (w <= 0 && el.parentElement) w = el.parentElement.clientWidth;
-    return w > 0 ? w : 800;
-  };
-
-  const drawCarbonTrendLineChart = (trend) => {
-    if (!carbonTrendChartRef.value || !trend || trend.length === 0) {
-      return;
-    }
-
-    d3.select(carbonTrendChartRef.value).selectAll('*').remove();
-
-    const margin = { top: 8, right: 12, bottom: 28, left: 48 };
-    const el = carbonTrendChartRef.value;
-    const baseW = measureCarbonTrendChartWidth(el);
-    const width = Math.max(120, baseW - margin.left - margin.right);
-    /** 與右欄表格同高：依圖表容器；viewBox 高須等於實際 clientHeight，否則 meet 會左右留白 */
-    const PLOT_FALLBACK = 150;
-    const ch = el?.clientHeight ?? 0;
-    let height;
-    let totalH;
-    if (ch > 40) {
-      totalH = ch;
-      height = Math.max(1, ch - margin.top - margin.bottom);
-    } else {
-      height = PLOT_FALLBACK;
-      totalH = height + margin.top + margin.bottom;
-    }
-    const years = trend.map((d) => String(d.year));
-
-    const maxVal = d3.max(trend, (d) => Math.max(d.direct || 0, d.indirect || 0, d.total || 0)) || 0;
-    const yMax = maxVal <= 0 ? 1 : maxVal * 1.05;
-
-    const svg = d3
-      .select(el)
-      .append('svg')
-      .attr('viewBox', `0 0 ${baseW} ${totalH}`)
-      .attr('preserveAspectRatio', 'xMinYMin meet')
-      .attr('width', '100%')
-      .attr('height', '100%')
-      .style('display', 'block')
-      .style('min-height', '0')
-      .style('max-width', '100%');
-
-    const g = svg.append('g').attr('transform', `translate(${margin.left},${margin.top})`);
-
-    const xScale = d3
-      .scalePoint()
-      .domain(years)
-      .range([0, width])
-      .padding(0.5);
-
-    const yScale = d3.scaleLinear().domain([0, yMax]).range([height, 0]);
-
-    const line = (key) =>
-      d3
-        .line()
-        .x((d) => xScale(String(d.year)))
-        .y((d) => yScale(d[key] ?? 0))
-        .curve(d3.curveMonotoneX);
-
-    const series = [
-      { key: 'direct', label: '直接', color: 'var(--my-color-green)' },
-      { key: 'indirect', label: '能源間接', color: 'var(--my-color-blue)' },
-      { key: 'total', label: '合計', color: 'var(--my-color-orange)' },
-    ];
-
-    g.append('g')
-      .attr('class', 'y-axis-grid')
-      .selectAll('line')
-      .data(yScale.ticks(5))
-      .enter()
-      .append('line')
-      .attr('x1', 0)
-      .attr('x2', width)
-      .attr('y1', (d) => yScale(d))
-      .attr('y2', (d) => yScale(d))
-      .attr('stroke', 'var(--my-color-gray-300, #dee2e6)')
-      .attr('stroke-dasharray', '2,2');
-
-    series.forEach((s) => {
-      g.append('path')
-        .datum(trend)
-        .attr('fill', 'none')
-        .attr('stroke', s.color)
-        .attr('stroke-width', 2)
-        .attr('d', line(s.key));
-    });
-
-    g.append('g')
-      .attr('transform', `translate(0,${height})`)
-      .selectAll('text')
-      .data(years)
-      .enter()
-      .append('text')
-      .attr('class', 'dashboard-chart-axis-text')
-      .attr('x', (y) => xScale(y))
-      .attr('y', 0)
-      .attr('dy', '1.05em')
-      .attr('text-anchor', 'middle')
-      .text((y) => String(y));
-
-    g.append('g')
-      .selectAll('text-y')
-      .data(yScale.ticks(5))
-      .enter()
-      .append('text')
-      .attr('class', 'dashboard-chart-axis-text')
-      .attr('x', -8)
-      .attr('y', (d) => yScale(d))
-      .attr('dy', '0.35em')
-      .attr('text-anchor', 'end')
-      .text((d) => (d === 0 ? '0' : d3.format('.2s')(d)));
-  };
 
   /** 依目前圖層重繪統計圖 */
   const redrawCharts = () => {
@@ -233,7 +131,7 @@
       summary?.yearlyCarbonTrend?.length;
     if (showYearlyTrend) {
       nextTick(() => {
-        drawCarbonTrendLineChart(summary.yearlyCarbonTrend);
+        drawCarbonTrendLineChart(carbonTrendChartRef.value, summary.yearlyCarbonTrend);
         requestAnimationFrame(() => {
           const s = currentLayerSummary.value;
           const l = currentLayer.value;
@@ -241,7 +139,7 @@
             (l?.isCarbonReportBizLayer || l?.isCarbonReportIndustryLayer) &&
             s?.yearlyCarbonTrend?.length;
           if (carbonTrendChartRef.value && stillTrend) {
-            drawCarbonTrendLineChart(s.yearlyCarbonTrend);
+            drawCarbonTrendLineChart(carbonTrendChartRef.value, s.yearlyCarbonTrend);
           }
         });
       });
@@ -329,7 +227,7 @@
             chartResizeRaf = null;
             const s = currentLayerSummary.value;
             if (s?.yearlyCarbonTrend?.length) {
-              drawCarbonTrendLineChart(s.yearlyCarbonTrend);
+              drawCarbonTrendLineChart(carbonTrendChartRef.value, s.yearlyCarbonTrend);
             }
           });
         });
@@ -582,6 +480,18 @@
                   </div>
                 </div>
               </div>
+            </div>
+          </div>
+
+          <!-- 依 事業名稱 分開：排放量／趨勢／表（與上區全層合計併陳；至少兩家 事業名稱 才出現本區塊） -->
+          <div v-if="showCarbonByFacility" class="col-12">
+            <div class="my-title-sm-black mb-3">各事業</div>
+            <div class="row g-0">
+              <DashboardCarbonFacilityGroup
+                v-for="(fac, fidx) in carbonByFacilityNameList"
+                :key="fac.facilityName + '-' + fidx"
+                :facility="fac"
+              />
             </div>
           </div>
         </div>
