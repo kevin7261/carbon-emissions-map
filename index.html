@@ -1,0 +1,17 @@
+<!doctype html><html lang=""><head><meta charset="utf-8"><meta http-equiv="X-UA-Compatible" content="IE=edge"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="icon" href="/carbon-emissions-map/favicon.ico"><title>carbon-emissions-map</title><script>// Script to handle SPA redirection from 404.html
+      (function(l) {
+        if (l.search) {
+          var q = {};
+          l.search.slice(1).split('&').forEach(function(v) {
+            var a = v.split('=');
+            q[a[0]] = a.slice(1).join('=').replace(/~and~/g, '&');
+          });
+          if (q.p) {
+            window.history.replaceState(null, null,
+              l.pathname.slice(0, -1) + q.p.replace(/^\/&/, '/') +
+              (q.q ? ('?' + q.q) : '') +
+              l.hash
+            );
+          }
+        }
+      }(window.location))</script><script defer="defer" src="/carbon-emissions-map/js/chunk-vendors.9e92b276.js"></script><script defer="defer" src="/carbon-emissions-map/js/app.9d1b6632.js"></script><link href="/carbon-emissions-map/css/chunk-vendors.709daddc.css" rel="stylesheet"><link href="/carbon-emissions-map/css/app.a8f89d5c.css" rel="stylesheet"></head><body><noscript><strong>We're sorry but carbon-emissions-map doesn't work properly without JavaScript enabled. Please enable it to continue.</strong></noscript><div id="app"></div></body></html>
