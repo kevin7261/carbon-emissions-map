@@ -1903,6 +1903,31 @@ export async function load41Data(layer) {
 }
 
 /**
+ * 行業分類名稱排序：依繁中筆畫序（Unicode `zh-Hant-u-co-stroke`）；環境不支援時退回 `zh-Hant` 讀音序。
+ * @param {string} a
+ * @param {string} b
+ * @returns {number}
+ */
+let carbonReportIndustryStrokeCollator;
+export function compareCarbonReportIndustryNameStrokeOrder(a, b) {
+  if (carbonReportIndustryStrokeCollator === undefined) {
+    try {
+      carbonReportIndustryStrokeCollator = new Intl.Collator('zh-Hant-u-co-stroke', {
+        sensitivity: 'variant',
+      });
+    } catch {
+      carbonReportIndustryStrokeCollator = null;
+    }
+  }
+  const sa = String(a);
+  const sb = String(b);
+  if (carbonReportIndustryStrokeCollator) {
+    return carbonReportIndustryStrokeCollator.compare(sa, sb);
+  }
+  return sa.localeCompare(sb, 'zh-Hant');
+}
+
+/**
  * 掃描碳排報告 CSV，回傳出現過的「年度」值（民國年），由新到舊排序。
  * 僅統計「緯度／經度」可解析為數字的列，與 {@link fetchReportCarbonRowsGroupedByYear} 一致。
  */
@@ -1929,6 +1954,8 @@ export async function fetchReportCarbonRowsGroupedByYear(fileName) {
       rowsByYear: {},
       bizIds: [],
       rowsByBizId: {},
+      industries: [],
+      rowsByIndustry: {},
       meta: null,
       orderedValidRows: [],
     };
@@ -1937,6 +1964,7 @@ export async function fetchReportCarbonRowsGroupedByYear(fileName) {
   const headerIndex = Object.fromEntries(headers.map((h, idx) => [h, idx]));
   const yearIdx = headers.indexOf('年度');
   const bizIdx = headers.indexOf('事業統編');
+  const industryIdx = headers.indexOf('行業分類');
   const latIdx = headers.indexOf('緯度');
   const lonIdx = headers.indexOf('經度');
   if (yearIdx < 0) {
@@ -1949,6 +1977,7 @@ export async function fetchReportCarbonRowsGroupedByYear(fileName) {
   const dataRows = lines.slice(1).map((line) => parseCsvLine(line));
   const rowsByYear = {};
   const rowsByBizId = {};
+  const rowsByIndustry = {};
   const orderedValidRows = [];
   for (const row of dataRows) {
     const lat = latIdx >= 0 ? parseFloat(row[latIdx]) : NaN;
@@ -1965,11 +1994,18 @@ export async function fetchReportCarbonRowsGroupedByYear(fileName) {
       if (!rowsByBizId[bid]) rowsByBizId[bid] = [];
       rowsByBizId[bid].push(row);
     }
+    if (industryIdx >= 0) {
+      let ind = String(row[industryIdx] ?? '').trim();
+      if (!ind) ind = '（未填）';
+      if (!rowsByIndustry[ind]) rowsByIndustry[ind] = [];
+      rowsByIndustry[ind].push(row);
+    }
   }
   const years = Object.keys(rowsByYear).sort((a, b) => Number(b) - Number(a));
   const bizIds = Object.keys(rowsByBizId).sort((a, b) => a.localeCompare(b, 'zh-Hant'));
+  const industries = Object.keys(rowsByIndustry).sort(compareCarbonReportIndustryNameStrokeOrder);
   const meta = { headers, headerIndex, yearIdx, latIdx, lonIdx };
-  return { years, rowsByYear, bizIds, rowsByBizId, meta, orderedValidRows };
+  return { years, rowsByYear, bizIds, rowsByBizId, industries, rowsByIndustry, meta, orderedValidRows };
 }
 
 /** 事業碳排 CSV 屬性顯示順序（屬性分頁、地圖 popup 依此；DataTable 見下述排除清單） */
@@ -2033,7 +2069,8 @@ export function parseReportCarbonTonCell(cell) {
 
 /**
  * 由已解析的列與圖層樣式，組成碳排報告圖層的 geoJson／table／summary（不發網路請求）。
- * 事業圖層需 `layer.isCarbonReportBizLayer`；年度圖層需 `layer.isCarbonReportYearLayer`（僅儀表板加總，無多年趨勢）。
+ * 事業／行業分類圖層需 `isCarbonReportBizLayer`／`isCarbonReportIndustryLayer`（儀表板加總與多年度趨勢）；
+ * 年度圖層需 `isCarbonReportYearLayer`（僅儀表板加總，無多年趨勢）。
  */
 export function buildCarbonReportPayloadFromRows(layer, meta, rows) {
   if (!meta) {
@@ -2133,9 +2170,9 @@ export function buildCarbonReportPayloadFromRows(layer, meta, rows) {
   };
 
   /**
-   * 事業（依統編）圖層：儀表板加總與年度趨勢與資料表同一來源（本函式產出之 tableData 逐列加總）。
+   * 事業（依統編）或行業分類圖層：儀表板加總與年度趨勢與資料表同一來源（本函式產出之 tableData 逐列加總）。
    */
-  if (layer.isCarbonReportBizLayer) {
+  if (layer.isCarbonReportBizLayer || layer.isCarbonReportIndustryLayer) {
     const kDirect = '直接排放量(公噸CO2e)';
     const kIndirect = '能源間接排放量(公噸CO2e)';
     const kTotal = '合計排放量(公噸CO2e)';

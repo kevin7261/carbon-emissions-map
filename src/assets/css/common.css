@@ -704,10 +704,10 @@ body.my-no-select * {
 }
 
 /*
- * Dashboard 年度趨勢 D3 圖刻度：與圖例 my-content-xs-gray 同 token（--my-font-size-xs）。
- * 用 !important 避免被外層或 scoped 覆蓋；勿在 D3 再寫死 font-size 屬性以免打架。
+ * Dashboard 年度趨勢 D3 圖刻度：一律 my-font-size-xs（含 tspan 子節點，避免 D3/UA 變成較小字）。
  */
-.dashboard-carbon-trend-chart svg text.dashboard-chart-axis-text {
+.dashboard-carbon-trend-chart svg text.dashboard-chart-axis-text,
+.dashboard-carbon-trend-chart svg text.dashboard-chart-axis-text tspan {
   font-size: var(--my-font-size-xs) !important;
   fill: var(--my-color-gray-600) !important;
   font-weight: var(--my-font-weight-md) !important;

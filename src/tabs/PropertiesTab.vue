@@ -7,6 +7,11 @@
     isCarbonEmissionTonCo2eKey,
     formatCarbonEmissionQuantityHtml,
   } from '@/utils/carbonEmissionDisplay.js';
+  import {
+    escapeHtmlForNumberDisplay,
+    formatLocaleNumberWithFractionXsHtml,
+    wrapFormattedNumberStringWithFractionXsHtml,
+  } from '@/utils/numberDisplay.js';
 
   export default {
     name: 'PropertiesTab',
@@ -354,7 +359,37 @@
         if (isCarbonEmissionTonCo2eKey(key)) {
           return formatCarbonEmissionQuantityHtml(value);
         }
+        if (typeof value === 'number' && Number.isFinite(value)) {
+          return formatLocaleNumberWithFractionXsHtml(value);
+        }
         return this.formatValue(value);
+      },
+      propertyValueUsesHtml(key, value) {
+        return (
+          isCarbonEmissionTonCo2eKey(key) || (typeof value === 'number' && Number.isFinite(value))
+        );
+      },
+      /** 緯／經度六位小數：小數段 xs；非有限數字回傳純文字「N/A」 */
+      formatCoord6DetailValue(n) {
+        if (typeof n !== 'number' || !Number.isFinite(n)) return 'N/A';
+        return wrapFormattedNumberStringWithFractionXsHtml(n.toFixed(6));
+      },
+      coord6DetailUsesHtml(n) {
+        return typeof n === 'number' && Number.isFinite(n);
+      },
+      formatCoordBracket6Html(lat, lng) {
+        const seg = (x) =>
+          typeof x === 'number' && Number.isFinite(x)
+            ? wrapFormattedNumberStringWithFractionXsHtml(x.toFixed(6))
+            : escapeHtmlForNumberDisplay('N/A');
+        return `[${seg(lat)}, ${seg(lng)}]`;
+      },
+      formatCoordParen6Html(lat, lng) {
+        const seg = (x) =>
+          typeof x === 'number' && Number.isFinite(x)
+            ? wrapFormattedNumberStringWithFractionXsHtml(x.toFixed(6))
+            : escapeHtmlForNumberDisplay('N/A');
+        return `(${seg(lat)}, ${seg(lng)})`;
       },
       formatLabel(key) {
         // 屬性名稱對照表，提供中文化顯示
@@ -421,7 +456,7 @@
               :key="key"
               :label="formatPropertyLabel(key)"
               :value="formatPropertyValue(key, value)"
-              :is-html="isCarbonEmissionTonCo2eKey(key)"
+              :is-html="propertyValueUsesHtml(key, value)"
             />
           </template>
 
@@ -509,11 +544,20 @@
               >
                 <div class="my-content-sm-black fw-bold mb-2">{{ point.name }}</div>
                 <DetailItem label="順序" :value="`第 ${point.order} 個路徑點`" />
-                <DetailItem label="緯度" :value="point.latitude.toFixed(6)" />
-                <DetailItem label="經度" :value="point.longitude.toFixed(6)" />
+                <DetailItem
+                  label="緯度"
+                  :value="formatCoord6DetailValue(point.latitude)"
+                  :is-html="coord6DetailUsesHtml(point.latitude)"
+                />
+                <DetailItem
+                  label="經度"
+                  :value="formatCoord6DetailValue(point.longitude)"
+                  :is-html="coord6DetailUsesHtml(point.longitude)"
+                />
                 <DetailItem
                   label="坐標"
-                  :value="`[${point.coordinates[1].toFixed(6)}, ${point.coordinates[0].toFixed(6)}]`"
+                  :value="formatCoordBracket6Html(point.coordinates[1], point.coordinates[0])"
+                  :is-html="true"
                 />
                 <DetailItem label="建立時間" :value="formatDateTime(point.createdAt)" />
               </div>
@@ -547,15 +591,23 @@
             <div class="my-title-xs-gray mb-3">坐標信息</div>
             <DetailItem
               label="緯度"
-              :value="selectedFeature.properties.latitude?.toFixed(6) || 'N/A'"
+              :value="formatCoord6DetailValue(selectedFeature.properties.latitude)"
+              :is-html="coord6DetailUsesHtml(selectedFeature.properties.latitude)"
             />
             <DetailItem
               label="經度"
-              :value="selectedFeature.properties.longitude?.toFixed(6) || 'N/A'"
+              :value="formatCoord6DetailValue(selectedFeature.properties.longitude)"
+              :is-html="coord6DetailUsesHtml(selectedFeature.properties.longitude)"
             />
             <DetailItem
               label="GeoJSON坐標"
-              :value="`[${selectedFeature.properties.latitude?.toFixed(6) || 'N/A'}, ${selectedFeature.properties.longitude?.toFixed(6) || 'N/A'}]`"
+              :value="
+                formatCoordBracket6Html(
+                  selectedFeature.properties.latitude,
+                  selectedFeature.properties.longitude
+                )
+              "
+              :is-html="true"
             />
 
             <!-- 其他屬性 -->
@@ -628,11 +680,20 @@
                   {{ point.name }}
                 </div>
                 <DetailItem label="順序" :value="`第 ${point.order} 個優化點`" />
-                <DetailItem label="緯度" :value="point.latitude.toFixed(6)" />
-                <DetailItem label="經度" :value="point.longitude.toFixed(6)" />
+                <DetailItem
+                  label="緯度"
+                  :value="formatCoord6DetailValue(point.latitude)"
+                  :is-html="coord6DetailUsesHtml(point.latitude)"
+                />
+                <DetailItem
+                  label="經度"
+                  :value="formatCoord6DetailValue(point.longitude)"
+                  :is-html="coord6DetailUsesHtml(point.longitude)"
+                />
                 <DetailItem
                   label="坐標"
-                  :value="`[${point.coordinates[1].toFixed(6)}, ${point.coordinates[0].toFixed(6)}]`"
+                  :value="formatCoordBracket6Html(point.coordinates[1], point.coordinates[0])"
+                  :is-html="true"
                 />
                 <DetailItem label="建立時間" :value="formatDateTime(point.createdAt)" />
               </div>
@@ -668,9 +729,10 @@
                   }}</span>
                   <span class="my-content-sm-black">
                     {{ point.name }}
-                    <span class="my-content-xs-gray ms-2">
-                      ({{ point.coordinates[1].toFixed(6) }}, {{ point.coordinates[0].toFixed(6) }})
-                    </span>
+                    <span
+                      class="my-content-xs-gray ms-2"
+                      v-html="formatCoordParen6Html(point.coordinates[1], point.coordinates[0])"
+                    ></span>
                   </span>
                 </div>
               </div>
@@ -707,15 +769,23 @@
             <div class="my-title-xs-gray mb-3">坐標信息</div>
             <DetailItem
               label="緯度"
-              :value="selectedFeature.geometry.coordinates[1]?.toFixed(6) || 'N/A'"
+              :value="formatCoord6DetailValue(selectedFeature.geometry.coordinates[1])"
+              :is-html="coord6DetailUsesHtml(selectedFeature.geometry.coordinates[1])"
             />
             <DetailItem
               label="經度"
-              :value="selectedFeature.geometry.coordinates[0]?.toFixed(6) || 'N/A'"
+              :value="formatCoord6DetailValue(selectedFeature.geometry.coordinates[0])"
+              :is-html="coord6DetailUsesHtml(selectedFeature.geometry.coordinates[0])"
             />
             <DetailItem
               label="GeoJSON坐標"
-              :value="`[${selectedFeature.geometry.coordinates[1].toFixed(6)}, ${selectedFeature.geometry.coordinates[0].toFixed(6)}]`"
+              :value="
+                formatCoordBracket6Html(
+                  selectedFeature.geometry.coordinates[1],
+                  selectedFeature.geometry.coordinates[0]
+                )
+              "
+              :is-html="true"
             />
 
             <!-- 其他屬性 -->

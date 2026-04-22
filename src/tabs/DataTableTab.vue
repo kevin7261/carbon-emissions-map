@@ -5,6 +5,7 @@
     formatCarbonReportFieldLabel,
     truncateCompanyNameForLayerDisplay,
   } from '@/utils/dataProcessor.js';
+  import { splitFormattedNumberForFractionXs } from '@/utils/numberDisplay.js';
 
   const emit = defineEmits(['highlight-on-map']);
 
@@ -140,6 +141,12 @@
 
   /** 表頭顯示（與碳排地圖 popup／tooltip 標籤一致；key 仍用原名排序） */
   const formatDataTableColumnLabel = formatCarbonReportFieldLabel;
+
+  /** 資料表數字欄：千分位後小數段用 &lt;small&gt;（瀏覽器預設略小） */
+  const dataTableNumberParts = (value) => {
+    if (typeof value !== 'number' || !Number.isFinite(value)) return null;
+    return splitFormattedNumberForFractionXs(value.toLocaleString('zh-TW'));
+  };
 
   /**
    * 🎯 處理地圖高亮顯示 (Handle Map Highlighting)
@@ -310,7 +317,18 @@
                         </div>
                       </div>
                       <div v-else class="my-content-xs-black px-3 py-2">
-                        {{ item[column] }}
+                        <template v-if="dataTableNumberParts(item[column])">
+                          <template
+                            v-for="p in [dataTableNumberParts(item[column])]"
+                            :key="String(item.id) + column + p.main + (p.frac ?? '')"
+                          >
+                            <template v-if="p.frac"
+                              >{{ p.main }}<small>{{ p.frac }}</small></template
+                            >
+                            <template v-else>{{ p.main }}</template>
+                          </template>
+                        </template>
+                        <template v-else>{{ item[column] }}</template>
                       </div>
                     </td>
                   </template>

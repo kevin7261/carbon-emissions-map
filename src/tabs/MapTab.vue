@@ -564,7 +564,8 @@
             } else {
               const useCarbonReportPanel =
                 dataLayerConfig.isCarbonReportYearLayer === true ||
-                dataLayerConfig.isCarbonReportBizLayer === true;
+                dataLayerConfig.isCarbonReportBizLayer === true ||
+                dataLayerConfig.isCarbonReportIndustryLayer === true;
               const detailHtml = useCarbonReportPanel
                 ? buildCarbonReportMapPanelHtml(feature.properties, layerName)
                 : buildAllPropertiesPopupHtml(feature.properties, layerName);

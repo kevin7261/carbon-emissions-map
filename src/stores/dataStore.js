@@ -6,6 +6,7 @@ import {
   fetchReportCarbonRowsGroupedByYear,
   buildCarbonReportPayloadFromRows,
   truncateCompanyNameForLayerDisplay,
+  compareCarbonReportIndustryNameStrokeOrder,
 } from '../utils/dataProcessor.js';
 
 const REPORT_CSV_FILE = 'report_with_google_location.csv';
@@ -221,6 +222,11 @@ export const useDataStore = defineStore(
         /** 各統編圖層由 initReportYearLayers 依同一 CSV 預載填入 */
         groupLayers: [],
       },
+      {
+        groupName: '行業分類',
+        /** 各行業一圖層（同 CSV 依「行業分類」欄彙總點位），由 initReportYearLayers 填入 */
+        groupLayers: [],
+      },
     ]);
 
     // 在新的分組結構中搜尋指定 ID 的圖層
@@ -268,6 +274,18 @@ export const useDataStore = defineStore(
       return Promise.resolve(payload);
     };
 
+    /** 與年度／事業相同：依「行業分類」鍵預載，開關圖層不讀檔 */
+    let carbonReportIndustryPayloadByIndustryKey = Object.create(null);
+
+    const loadCarbonReportIndustryFromPrecache = (layer) => {
+      const key = layer.filterIndustry != null ? String(layer.filterIndustry).trim() : '';
+      const payload = carbonReportIndustryPayloadByIndustryKey[key];
+      if (!payload) {
+        return Promise.reject(new Error(`無預載行業分類資料: ${key || '(未指定)'}`));
+      }
+      return Promise.resolve(payload);
+    };
+
     const carbonReportBizLayerName = (meta, bizId, rowsForBiz) => {
       const ni = meta?.headerIndex?.['事業名稱'];
       if (ni === undefined || !rowsForBiz?.length) {
@@ -284,6 +302,7 @@ export const useDataStore = defineStore(
     const initReportYearLayers = async () => {
       const infra = layers.value.find((g) => g.groupName === '年度');
       const bizGroup = layers.value.find((g) => g.groupName === '事業');
+      const industryGroup = layers.value.find((g) => g.groupName === '行業分類');
       if (!infra) return;
 
       const preserved = (infra.groupLayers || []).filter(
@@ -293,15 +312,18 @@ export const useDataStore = defineStore(
 
       carbonReportYearPayloadByYear = Object.create(null);
       carbonReportBizPayloadByBizId = Object.create(null);
+      carbonReportIndustryPayloadByIndustryKey = Object.create(null);
 
       try {
         const grouped = await fetchReportCarbonRowsGroupedByYear(REPORT_CSV_FILE);
-        const { years, rowsByYear, bizIds, rowsByBizId, meta } = grouped;
+        const { years, rowsByYear, bizIds, rowsByBizId, industries, rowsByIndustry, meta } =
+          grouped;
 
         if (!meta) {
           console.warn('碳排 CSV 無法解析（無表頭或無資料列）');
           infra.groupLayers = preserved;
           if (bizGroup) bizGroup.groupLayers = [];
+          if (industryGroup) industryGroup.groupLayers = [];
           businessLayerIndustryOptions.value = [];
           primaryCarbonReportLayerId.value = null;
           return;
@@ -370,7 +392,7 @@ export const useDataStore = defineStore(
             }
             const uniqueIndustries = [
               ...new Set(bizIds.map((id) => bizIndustry.get(id))),
-            ].sort((a, b) => a.localeCompare(b, 'zh-Hant'));
+            ].sort(compareCarbonReportIndustryNameStrokeOrder);
             const industryColorByName = Object.fromEntries(
               uniqueIndustries.map((name, i) => [name, palette[i % palette.length]])
             );
@@ -421,12 +443,60 @@ export const useDataStore = defineStore(
             bizGroup.groupLayers = bizLayers;
           }
         }
+
+        if (industryGroup) {
+          if (!industries?.length) {
+            industryGroup.groupLayers = [];
+          } else {
+            const industryColorByNameInd = Object.fromEntries(
+              industries.map((name, i) => [name, palette[i % palette.length]])
+            );
+            const industryLayers = industries.map((indName, i) => {
+              const rows = rowsByIndustry[indName] ?? [];
+              const layerColor = industryColorByNameInd[indName] ?? palette[i % palette.length];
+              const layerStub = {
+                layerId: `report-industry-${i}`,
+                layerName: indName,
+                filterIndustry: indName,
+                layerColor,
+                isCarbonReportIndustryLayer: true,
+              };
+              carbonReportIndustryPayloadByIndustryKey[indName] = buildCarbonReportPayloadFromRows(
+                layerStub,
+                meta,
+                rows
+              );
+              return {
+                layerId: layerStub.layerId,
+                layerName: indName,
+                filterIndustry: indName,
+                visible: false,
+                isLoading: false,
+                isLoaded: false,
+                type: 'point',
+                shape: 'circle',
+                layerColor,
+                geoJsonData: null,
+                summaryData: null,
+                tableData: null,
+                legendData: null,
+                loader: loadCarbonReportIndustryFromPrecache,
+                fileName: REPORT_CSV_FILE,
+                fieldName: null,
+                isCarbonReportIndustryLayer: true,
+              };
+            });
+            industryGroup.groupLayers = industryLayers;
+          }
+        }
       } catch (e) {
-        console.error('初始化年度／事業圖層失敗:', e);
+        console.error('初始化年度／事業／行業分類圖層失敗:', e);
         carbonReportYearPayloadByYear = Object.create(null);
         carbonReportBizPayloadByBizId = Object.create(null);
+        carbonReportIndustryPayloadByIndustryKey = Object.create(null);
         infra.groupLayers = preserved;
         if (bizGroup) bizGroup.groupLayers = [];
+        if (industryGroup) industryGroup.groupLayers = [];
         businessLayerIndustryOptions.value = [];
         primaryCarbonReportLayerId.value = null;
       }

@@ -1,6 +1,7 @@
 <script setup>
   import { ref, computed, watch, onMounted, nextTick, onUnmounted } from 'vue';
   import { useDataStore } from '@/stores/dataStore.js';
+  import { splitFormattedNumberForFractionXs } from '@/utils/numberDisplay.js';
   import * as d3 from 'd3';
 
   const dataStore = useDataStore();
@@ -25,13 +26,7 @@
    * Dashboard 數字：小數點後用 xs 字級（frac 含「.」與小數位）
    * @returns {{ main: string, frac: string | null }}
    */
-  const formatCarbonTonsParts = (n) => {
-    const s = formatCarbonTons(n);
-    if (s === '—') return { main: '—', frac: null };
-    const m = s.match(/^(.+)\.(\d+)$/);
-    if (m) return { main: m[1], frac: `.${m[2]}` };
-    return { main: s, frac: null };
-  };
+  const formatCarbonTonsParts = (n) => splitFormattedNumberForFractionXs(formatCarbonTons(n));
 
   /** 各年度排放量表：固定小數後四位 */
   const formatCarbonTonsYearlyTable = (n) => {
@@ -42,13 +37,8 @@
     });
   };
 
-  const formatCarbonTonsPartsYearlyTable = (n) => {
-    const s = formatCarbonTonsYearlyTable(n);
-    if (s === '—') return { main: '—', frac: null };
-    const m = s.match(/^(.+)\.(\d+)$/);
-    if (m) return { main: m[1], frac: `.${m[2]}` };
-    return { main: s, frac: null };
-  };
+  const formatCarbonTonsPartsYearlyTable = (n) =>
+    splitFormattedNumberForFractionXs(formatCarbonTonsYearlyTable(n));
 
   /** 排放量三卡數字（拆主數字／小數，供 template 使用） */
   const carbonFacilityDisplayTotals = computed(() => {
@@ -108,7 +98,11 @@
   const showCarbonReportDashboard = computed(() => {
     const l = currentLayer.value;
     const s = currentLayerSummary.value;
-    return !!(l && (l.isCarbonReportBizLayer || l.isCarbonReportYearLayer) && s);
+    return !!(
+      l &&
+      (l.isCarbonReportBizLayer || l.isCarbonReportYearLayer || l.isCarbonReportIndustryLayer) &&
+      s
+    );
   });
 
   /**
@@ -291,17 +285,19 @@
   const redrawCharts = () => {
     const summary = currentLayerSummary.value;
     const layer = currentLayer.value;
-    if (layer?.isCarbonReportBizLayer && summary?.yearlyCarbonTrend?.length) {
+    const showYearlyTrend =
+      (layer?.isCarbonReportBizLayer || layer?.isCarbonReportIndustryLayer) &&
+      summary?.yearlyCarbonTrend?.length;
+    if (showYearlyTrend) {
       nextTick(() => {
         drawCarbonTrendLineChart(summary.yearlyCarbonTrend);
         requestAnimationFrame(() => {
           const s = currentLayerSummary.value;
           const l = currentLayer.value;
-          if (
-            carbonTrendChartRef.value &&
-            s?.yearlyCarbonTrend?.length &&
-            l?.isCarbonReportBizLayer
-          ) {
+          const stillTrend =
+            (l?.isCarbonReportBizLayer || l?.isCarbonReportIndustryLayer) &&
+            s?.yearlyCarbonTrend?.length;
+          if (carbonTrendChartRef.value && stillTrend) {
             drawCarbonTrendLineChart(s.yearlyCarbonTrend);
           }
         });
@@ -455,9 +451,9 @@
                       <span class="dashboard-carbon-total-figure">
                         <template v-if="carbonFacilityDisplayTotals?.direct.frac">
                           {{ carbonFacilityDisplayTotals.direct.main
-                          }}<span class="dashboard-carbon-fraction-xs">{{
+                          }}<small>{{
                             carbonFacilityDisplayTotals.direct.frac
-                          }}</span>
+                          }}</small>
                         </template>
                         <template v-else>{{ carbonFacilityDisplayTotals?.direct.main }}</template>
                       </span>
@@ -475,9 +471,9 @@
                       <span class="dashboard-carbon-total-figure">
                         <template v-if="carbonFacilityDisplayTotals?.indirect.frac">
                           {{ carbonFacilityDisplayTotals.indirect.main
-                          }}<span class="dashboard-carbon-fraction-xs">{{
+                          }}<small>{{
                             carbonFacilityDisplayTotals.indirect.frac
-                          }}</span>
+                          }}</small>
                         </template>
                         <template v-else>{{ carbonFacilityDisplayTotals?.indirect.main }}</template>
                       </span>
@@ -495,9 +491,9 @@
                       <span class="dashboard-carbon-total-figure">
                         <template v-if="carbonFacilityDisplayTotals?.total.frac">
                           {{ carbonFacilityDisplayTotals.total.main
-                          }}<span class="dashboard-carbon-fraction-xs">{{
+                          }}<small>{{
                             carbonFacilityDisplayTotals.total.frac
-                          }}</span>
+                          }}</small>
                         </template>
                         <template v-else>{{ carbonFacilityDisplayTotals?.total.main }}</template>
                       </span>
@@ -509,9 +505,13 @@
             </div>
           </div>
 
-          <!-- 年度趨勢（僅事業圖層：該統編多年度） -->
+          <!-- 年度趨勢（事業：該統編多年度；行業分類：該行業彙總多年度） -->
           <div
-            v-if="currentLayer?.isCarbonReportBizLayer && currentLayerSummary.yearlyCarbonTrend?.length"
+            v-if="
+              (currentLayer?.isCarbonReportBizLayer ||
+                currentLayer?.isCarbonReportIndustryLayer) &&
+              currentLayerSummary.yearlyCarbonTrend?.length
+            "
             class="col-12"
           >
             <div class="rounded-4 my-bgcolor-gray-100 p-3 mb-3">
@@ -543,7 +543,7 @@
                               :key="'h-d-' + p.main + (p.frac ?? '')"
                             >
                               <template v-if="p.frac"
-                                >{{ p.main }}<span class="dashboard-carbon-fraction-xs">{{ p.frac }}</span></template
+                                >{{ p.main }}<small>{{ p.frac }}</small></template
                               >
                               <template v-else>{{ p.main }}</template>
                             </template>
@@ -564,7 +564,7 @@
                               :key="'h-i-' + p.main + (p.frac ?? '')"
                             >
                               <template v-if="p.frac"
-                                >{{ p.main }}<span class="dashboard-carbon-fraction-xs">{{ p.frac }}</span></template
+                                >{{ p.main }}<small>{{ p.frac }}</small></template
                               >
                               <template v-else>{{ p.main }}</template>
                             </template>
@@ -585,7 +585,7 @@
                               :key="'h-t-' + p.main + (p.frac ?? '')"
                             >
                               <template v-if="p.frac"
-                                >{{ p.main }}<span class="dashboard-carbon-fraction-xs">{{ p.frac }}</span></template
+                                >{{ p.main }}<small>{{ p.frac }}</small></template
                               >
                               <template v-else>{{ p.main }}</template>
                             </template>
@@ -629,7 +629,7 @@
                             :key="row.year + 'd' + p.main + (p.frac ?? '')"
                           >
                             <template v-if="p.frac"
-                              >{{ p.main }}<span class="dashboard-carbon-fraction-xs">{{ p.frac }}</span></template
+                              >{{ p.main }}<small>{{ p.frac }}</small></template
                             >
                             <template v-else>{{ p.main }}</template>
                           </template>
@@ -642,7 +642,7 @@
                             :key="row.year + 'i' + p.main + (p.frac ?? '')"
                           >
                             <template v-if="p.frac"
-                              >{{ p.main }}<span class="dashboard-carbon-fraction-xs">{{ p.frac }}</span></template
+                              >{{ p.main }}<small>{{ p.frac }}</small></template
                             >
                             <template v-else>{{ p.main }}</template>
                           </template>
@@ -655,7 +655,7 @@
                             :key="row.year + 't' + p.main + (p.frac ?? '')"
                           >
                             <template v-if="p.frac"
-                              >{{ p.main }}<span class="dashboard-carbon-fraction-xs">{{ p.frac }}</span></template
+                              >{{ p.main }}<small>{{ p.frac }}</small></template
                             >
                             <template v-else>{{ p.main }}</template>
                           </template>
@@ -709,10 +709,6 @@
   }
 
   /* 「排放量」三欄與「年度趨勢」折線：直接綠、能源間接藍、合計橘 */
-  .dashboard-carbon-fraction-xs {
-    font-size: var(--my-font-size-xs);
-  }
-
   .dashboard-carbon-total-figure {
     font-size: var(--my-font-size-2xl);
     font-weight: var(--my-font-weight-xl);
