@@ -21,6 +21,46 @@
     return n.toLocaleString('zh-TW', { maximumFractionDigits: 2, minimumFractionDigits: 0 });
   };
 
+  /**
+   * Dashboard 數字：小數點後用 xs 字級（frac 含「.」與小數位）
+   * @returns {{ main: string, frac: string | null }}
+   */
+  const formatCarbonTonsParts = (n) => {
+    const s = formatCarbonTons(n);
+    if (s === '—') return { main: '—', frac: null };
+    const m = s.match(/^(.+)\.(\d+)$/);
+    if (m) return { main: m[1], frac: `.${m[2]}` };
+    return { main: s, frac: null };
+  };
+
+  /** 各年度排放量表：固定小數後四位 */
+  const formatCarbonTonsYearlyTable = (n) => {
+    if (typeof n !== 'number' || !Number.isFinite(n)) return '—';
+    return n.toLocaleString('zh-TW', {
+      minimumFractionDigits: 4,
+      maximumFractionDigits: 4,
+    });
+  };
+
+  const formatCarbonTonsPartsYearlyTable = (n) => {
+    const s = formatCarbonTonsYearlyTable(n);
+    if (s === '—') return { main: '—', frac: null };
+    const m = s.match(/^(.+)\.(\d+)$/);
+    if (m) return { main: m[1], frac: `.${m[2]}` };
+    return { main: s, frac: null };
+  };
+
+  /** 排放量三卡數字（拆主數字／小數，供 template 使用） */
+  const carbonFacilityDisplayTotals = computed(() => {
+    const t = currentLayerSummary.value?.carbonFacilityTotals;
+    if (!t) return null;
+    return {
+      direct: formatCarbonTonsParts(t.direct),
+      indirect: formatCarbonTonsParts(t.indirect),
+      total: formatCarbonTonsParts(t.total),
+    };
+  });
+
   // 獲取所有開啟且有資料的圖層
   const visibleLayers = computed(() => {
     const allLayers = dataStore.getAllLayers();
@@ -410,16 +450,17 @@
                     class="text-center rounded-3 my-bgcolor-white px-3 py-3 dashboard-carbon-total-card dashboard-carbon-total-card--direct"
                   >
                     <div
-                      class="d-flex align-items-baseline justify-content-center gap-1"
-                      :class="
-                        currentLayer?.isCarbonReportYearLayer
-                          ? 'flex-nowrap text-nowrap overflow-x-auto'
-                          : 'flex-wrap text-break'
-                      "
+                      class="d-flex align-items-baseline justify-content-center gap-1 flex-wrap text-break mw-100 min-w-0"
                     >
-                      <span class="dashboard-carbon-total-figure text-nowrap">{{
-                        formatCarbonTons(currentLayerSummary.carbonFacilityTotals.direct)
-                      }}</span>
+                      <span class="dashboard-carbon-total-figure">
+                        <template v-if="carbonFacilityDisplayTotals?.direct.frac">
+                          {{ carbonFacilityDisplayTotals.direct.main
+                          }}<span class="dashboard-carbon-fraction-xs">{{
+                            carbonFacilityDisplayTotals.direct.frac
+                          }}</span>
+                        </template>
+                        <template v-else>{{ carbonFacilityDisplayTotals?.direct.main }}</template>
+                      </span>
                     </div>
                     <div class="my-content-xs-gray mt-2">直接排放</div>
                   </div>
@@ -429,16 +470,17 @@
                     class="text-center rounded-3 my-bgcolor-white px-3 py-3 dashboard-carbon-total-card dashboard-carbon-total-card--indirect"
                   >
                     <div
-                      class="d-flex align-items-baseline justify-content-center gap-1"
-                      :class="
-                        currentLayer?.isCarbonReportYearLayer
-                          ? 'flex-nowrap text-nowrap overflow-x-auto'
-                          : 'flex-wrap text-break'
-                      "
+                      class="d-flex align-items-baseline justify-content-center gap-1 flex-wrap text-break mw-100 min-w-0"
                     >
-                      <span class="dashboard-carbon-total-figure text-nowrap">{{
-                        formatCarbonTons(currentLayerSummary.carbonFacilityTotals.indirect)
-                      }}</span>
+                      <span class="dashboard-carbon-total-figure">
+                        <template v-if="carbonFacilityDisplayTotals?.indirect.frac">
+                          {{ carbonFacilityDisplayTotals.indirect.main
+                          }}<span class="dashboard-carbon-fraction-xs">{{
+                            carbonFacilityDisplayTotals.indirect.frac
+                          }}</span>
+                        </template>
+                        <template v-else>{{ carbonFacilityDisplayTotals?.indirect.main }}</template>
+                      </span>
                     </div>
                     <div class="my-content-xs-gray mt-2">能源間接排放</div>
                   </div>
@@ -448,16 +490,17 @@
                     class="text-center rounded-3 my-bgcolor-white px-3 py-3 dashboard-carbon-total-card dashboard-carbon-total-card--combined"
                   >
                     <div
-                      class="d-flex align-items-baseline justify-content-center gap-1"
-                      :class="
-                        currentLayer?.isCarbonReportYearLayer
-                          ? 'flex-nowrap text-nowrap overflow-x-auto'
-                          : 'flex-wrap text-break'
-                      "
+                      class="d-flex align-items-baseline justify-content-center gap-1 flex-wrap text-break mw-100 min-w-0"
                     >
-                      <span class="dashboard-carbon-total-figure text-nowrap">{{
-                        formatCarbonTons(currentLayerSummary.carbonFacilityTotals.total)
-                      }}</span>
+                      <span class="dashboard-carbon-total-figure">
+                        <template v-if="carbonFacilityDisplayTotals?.total.frac">
+                          {{ carbonFacilityDisplayTotals.total.main
+                          }}<span class="dashboard-carbon-fraction-xs">{{
+                            carbonFacilityDisplayTotals.total.frac
+                          }}</span>
+                        </template>
+                        <template v-else>{{ carbonFacilityDisplayTotals?.total.main }}</template>
+                      </span>
                     </div>
                     <div class="my-content-xs-gray mt-2">合計排放</div>
                   </div>
@@ -494,9 +537,17 @@
                         ></span>
                         <span>直接</span>
                         <template v-if="carbonTrendHoverRow">
-                          <span class="tabular-nums">{{
-                            formatCarbonTons(carbonTrendHoverRow.direct)
-                          }}</span>
+                          <span class="tabular-nums">
+                            <template
+                              v-for="p in [formatCarbonTonsParts(carbonTrendHoverRow.direct)]"
+                              :key="'h-d-' + p.main + (p.frac ?? '')"
+                            >
+                              <template v-if="p.frac"
+                                >{{ p.main }}<span class="dashboard-carbon-fraction-xs">{{ p.frac }}</span></template
+                              >
+                              <template v-else>{{ p.main }}</template>
+                            </template>
+                          </span>
                           <span class="fw-normal">公噸 CO₂e</span>
                         </template>
                       </span>
@@ -507,9 +558,17 @@
                         ></span>
                         <span>能源間接</span>
                         <template v-if="carbonTrendHoverRow">
-                          <span class="tabular-nums">{{
-                            formatCarbonTons(carbonTrendHoverRow.indirect)
-                          }}</span>
+                          <span class="tabular-nums">
+                            <template
+                              v-for="p in [formatCarbonTonsParts(carbonTrendHoverRow.indirect)]"
+                              :key="'h-i-' + p.main + (p.frac ?? '')"
+                            >
+                              <template v-if="p.frac"
+                                >{{ p.main }}<span class="dashboard-carbon-fraction-xs">{{ p.frac }}</span></template
+                              >
+                              <template v-else>{{ p.main }}</template>
+                            </template>
+                          </span>
                           <span class="fw-normal">公噸 CO₂e</span>
                         </template>
                       </span>
@@ -520,9 +579,17 @@
                         ></span>
                         <span>合計</span>
                         <template v-if="carbonTrendHoverRow">
-                          <span class="tabular-nums">{{
-                            formatCarbonTons(carbonTrendHoverRow.total)
-                          }}</span>
+                          <span class="tabular-nums">
+                            <template
+                              v-for="p in [formatCarbonTonsParts(carbonTrendHoverRow.total)]"
+                              :key="'h-t-' + p.main + (p.frac ?? '')"
+                            >
+                              <template v-if="p.frac"
+                                >{{ p.main }}<span class="dashboard-carbon-fraction-xs">{{ p.frac }}</span></template
+                              >
+                              <template v-else>{{ p.main }}</template>
+                            </template>
+                          </span>
                           <span class="fw-normal">公噸 CO₂e</span>
                         </template>
                       </span>
@@ -557,17 +624,41 @@
                         <td
                           class="text-end py-2 align-middle dashboard-yearly-num dashboard-yearly-num--direct"
                         >
-                          {{ formatCarbonTons(row.direct) }}
+                          <template
+                            v-for="p in [formatCarbonTonsPartsYearlyTable(row.direct)]"
+                            :key="row.year + 'd' + p.main + (p.frac ?? '')"
+                          >
+                            <template v-if="p.frac"
+                              >{{ p.main }}<span class="dashboard-carbon-fraction-xs">{{ p.frac }}</span></template
+                            >
+                            <template v-else>{{ p.main }}</template>
+                          </template>
                         </td>
                         <td
                           class="text-end py-2 align-middle dashboard-yearly-num dashboard-yearly-num--indirect"
                         >
-                          {{ formatCarbonTons(row.indirect) }}
+                          <template
+                            v-for="p in [formatCarbonTonsPartsYearlyTable(row.indirect)]"
+                            :key="row.year + 'i' + p.main + (p.frac ?? '')"
+                          >
+                            <template v-if="p.frac"
+                              >{{ p.main }}<span class="dashboard-carbon-fraction-xs">{{ p.frac }}</span></template
+                            >
+                            <template v-else>{{ p.main }}</template>
+                          </template>
                         </td>
                         <td
                           class="text-end pe-3 py-2 align-middle dashboard-yearly-num dashboard-yearly-num--total"
                         >
-                          {{ formatCarbonTons(row.total) }}
+                          <template
+                            v-for="p in [formatCarbonTonsPartsYearlyTable(row.total)]"
+                            :key="row.year + 't' + p.main + (p.frac ?? '')"
+                          >
+                            <template v-if="p.frac"
+                              >{{ p.main }}<span class="dashboard-carbon-fraction-xs">{{ p.frac }}</span></template
+                            >
+                            <template v-else>{{ p.main }}</template>
+                          </template>
                         </td>
                       </tr>
                     </tbody>
@@ -618,10 +709,16 @@
   }
 
   /* 「排放量」三欄與「年度趨勢」折線：直接綠、能源間接藍、合計橘 */
+  .dashboard-carbon-fraction-xs {
+    font-size: var(--my-font-size-xs);
+  }
+
   .dashboard-carbon-total-figure {
     font-size: var(--my-font-size-2xl);
     font-weight: var(--my-font-weight-xl);
     line-height: 1.25;
+    max-width: 100%;
+    overflow-wrap: anywhere;
   }
 
   .dashboard-carbon-total-card--direct .dashboard-carbon-total-figure {
